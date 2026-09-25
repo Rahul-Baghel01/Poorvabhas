@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
+import { PHASE_PRODUCTION_BUILD } from "next/constants";
 
+// Read at BUILD time: the rewrite destination is baked into the build output.
 const API_URL = process.env.API_URL || "http://localhost:8000";
 
 const nextConfig: NextConfig = {
@@ -24,4 +26,9 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default function config(phase: string): NextConfig {
+  if (phase === PHASE_PRODUCTION_BUILD && !process.env.API_URL) {
+    console.warn("[poorvabhas] API_URL is not set: this build will proxy /api to http://localhost:8000. Set API_URL to the backend URL before building for deployment.");
+  }
+  return nextConfig;
+}

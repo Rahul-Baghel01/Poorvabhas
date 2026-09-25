@@ -6,11 +6,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import OperationalError
 
-from app.config import get_settings
+from app.config import get_settings, validate_production_settings
 from app.db import check_db
 from app.routers import admin, analytics, auth, imports, reports, review
 
 log = logging.getLogger("poorvabhas")
+
+# Fail fast (before serving anything) if production is configured with a published secret.
+validate_production_settings(get_settings())
 
 
 @asynccontextmanager
@@ -42,7 +45,8 @@ async def db_down(_: Request, exc: OperationalError):
 def health():
     s = get_settings()
     ok = check_db()
-    return {"status": "ok" if ok else "degraded", "database": "up" if ok else "unavailable", "environment": s.environment, "demo_mode": s.demo_mode}
+    body = {"status": "ok" if ok else "degraded", "database": "up" if ok else "unavailable", "environment": s.environment, "demo_mode": s.demo_mode}
+    return JSONResponse(status_code=200 if ok else 503, content=body)
 
 
 for r in (auth.router, reports.router, review.router, analytics.router, imports.router, admin.router):

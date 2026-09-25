@@ -1,0 +1,5 @@
+# Optional: enables the TransformerSafetyClassifier (DistilBERT-style fine-tuning).
+# Not required - the system falls back to deterministic + TF-IDF/LogReg.
+-r requirements.txt
+torch
+transformers>=4.40

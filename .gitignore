@@ -1,0 +1,26 @@
+# env / secrets
+.env
+.env.local
+*.env.local
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+backend/models_store/
+*.egg-info/
+
+# node
+node_modules/
+.next/
+out/
+coverage/
+frontend/test-results/
+frontend/playwright-report/
+frontend/next-env.d.ts
+*.tsbuildinfo
+
+# os / editor
+.DS_Store
+Thumbs.db

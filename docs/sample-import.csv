@@ -1,0 +1,9 @@
+report_id,report_type,date,site,location,activity,equipment,description,worker_role,contractor,injury_severity,shift,weather
+IMP-2026-0001,Near Miss,2026-09-18,Digboi,GGS-2 Digboi,Pump maintenance,Booster pump,"During seal replacement the discharge valve was passing; isolation was not verified and residual pressure was observed. Job stopped.",Fitter,Contractor-A (synthetic),None,Day,Clear
+IMP-2026-0002,Unsafe Act,2026-09-19,Duliajan,OCS-4 Duliajan,Hot work,Grinder,"Grinding started near the separator drain without a gas test and without a fire blanket. Fire watch stopped the work.",Welder,Contractor-B (synthetic),None,Day,Hot
+IMP-2026-0003,Unsafe Condition,2026-09-20,Moran,Warehouse Yard,Inspection,Walkway,"Housekeeping poor in the warehouse yard, pallets stored on the walkway.",Storekeeper,,None,Day,Clear
+IMP-2026-0004,Near Miss,2026-09-21,Tengakhat,Drilling Rig SR-5,Lifting,Hydra crane,"A sling parted during the lift and the load dropped near the rigger. No exclusion zone had been set up. No injury.",Rigger,,None,Night,Rain
+IMP-2026-0005,Unsafe Act,2026-09-22,Naharkatiya,Pipeline ROW km 14,Excavation,Excavator,"Workers were inside a 2 m trench near the flowline; trench walls had no shoring.",Helper,Contractor-C (synthetic),None,Day,Clear
+IMP-2026-0006,Unsafe Condition,21/09/2026,Hapjan,Compressor Station C-5,Maintenance,Gas compressor,"Something seemed wrong near the compressor, informed supervisor.",Operator,,None,Day,Clear
+IMP-BAD-0001,Rumour,2026-09-22,Digboi,GGS-2 Digboi,Pump maintenance,Pump,"Invalid report type row",Fitter,,None,Day,Clear
+IMP-BAD-0002,Near Miss,,Digboi,GGS-2 Digboi,Lifting,Crane,"Missing date should be rejected by validation.",Rigger,,None,Day,Clear

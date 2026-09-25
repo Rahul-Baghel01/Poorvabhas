@@ -1,0 +1,112 @@
+@import "tailwindcss";
+
+/* Poorvabhas design tokens - industrial HSE command software. Dark by design. */
+@theme {
+  --color-bg: #080b0c;
+  --color-surface: #111617;
+  --color-surface-2: #161b1c;
+  --color-surface-3: #1c2324;
+  --color-border: #283032;
+  --color-border-strong: #394346;
+  --color-fg: #f4f5f5;
+  --color-fg-2: #c2c9ca;
+  --color-muted: #8a9597;
+  --color-red: #ff4a43;
+  --color-red-deep: #c9362d;
+  --color-amber: #f2b233;
+  --color-cyan: #27c7c9;
+  --color-green: #32b978;
+  --color-neutral-mark: #6b7678;
+
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, "SFMono-Regular", monospace;
+
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Technical labels */
+.label-tech {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Visible, consistent focus */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-cyan);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Subtle engineering grid used on headers */
+.grid-bg {
+  background-image: linear-gradient(to right, rgba(40, 48, 50, 0.35) 1px, transparent 1px), linear-gradient(to bottom, rgba(40, 48, 50, 0.35) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.hazard-stripe {
+  background: repeating-linear-gradient(135deg, var(--color-amber) 0 8px, #0f0f0f 8px 16px);
+}
+
+/* Evidence highlight in report text */
+mark.ev {
+  background: transparent;
+  color: inherit;
+  border-bottom: 2px solid currentColor;
+  padding: 0 1px;
+  border-radius: 1px;
+}
+
+::selection {
+  background: rgba(39, 199, 201, 0.35);
+}
+
+/* Scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2e3739 transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.recharts-surface:focus {
+  outline: none;
+}
+
+/* Horizontal scrollers must be containing blocks, otherwise absolutely positioned
+   children (e.g. .sr-only labels inside table cells) escape the clip and widen the page. */
+.overflow-x-auto,
+.overflow-auto {
+  position: relative;
+}

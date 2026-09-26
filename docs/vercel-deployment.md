@@ -61,7 +61,7 @@ Run the backend tests with `cd backend; .\.venv\Scripts\python.exe -m pytest -q`
 
 ## Deploy and verify
 
-After committing the changes and linking the Git repository in Vercel, a push to `main` triggers production deployment. Alternatively, from the repository root use `vercel link` followed by `vercel deploy --prod` when authorized. Confirm `/api/health` returns HTTP 200 and `database: up`, then load `/login` and sign in with an existing account. Verify the dashboard and the API workflows above against the live deployment. A successful local build alone does **not** verify Vercel routing, bundle size, database reachability, or production cookies.
+After committing the changes and linking the Git repository in Vercel, a push to `main` triggers production deployment. Alternatively, from the repository root use `vercel link` followed by `vercel deploy --prod` when authorized. Confirm `/api/health` returns HTTP 200 and `database: up`, then load `/login` and sign in with an existing account. The health endpoint only checks `SELECT 1`; it does not prove that `users`, `roles`, `audit_logs`, or model artifact tables have been initialized. If login fails with a missing-table error in Vercel function logs, perform the one-time database initialization described above from a trusted machine after authorizing the database changes. Verify the dashboard and the API workflows above against the live deployment. A successful local build alone does **not** verify Vercel routing, bundle size, database reachability, or production cookies.
 
 ## Runtime limits
 

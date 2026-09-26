@@ -13,12 +13,14 @@ class Base(DeclarativeBase):
 
 _engine: Engine | None = None
 _SessionLocal: sessionmaker | None = None
+_vector_column_configured = False
 
 
 def configure_engine(url: str | None = None) -> Engine:
     """(Re)create the global engine. Tests call this with a SQLite URL."""
-    global _engine, _SessionLocal
+    global _engine, _SessionLocal, _vector_column_configured
     url = url or get_settings().database_url
+    _vector_column_configured = False
     kwargs: dict = {"pool_pre_ping": True, "future": True}
     if url.startswith("postgresql"):
         # Fail health checks promptly when an external database is unreachable.
@@ -53,6 +55,7 @@ def session_factory() -> sessionmaker:
 
 
 def get_db() -> Iterator[Session]:
+    configure_vector_column()
     db = session_factory()()
     try:
         yield db
@@ -77,10 +80,22 @@ def pgvector_available() -> bool:
         return False
 
 
+def configure_vector_column() -> None:
+    """Bind `embeddings.vector` to pgvector when available, once per process. Serverless
+    deployments never run `init_db`, so requests call this; it creates no tables."""
+    global _vector_column_configured
+    if _vector_column_configured:
+        return
+    from app import models
+
+    models.configure_vector_column(pgvector_available())
+    _vector_column_configured = True
+
+
 def init_db() -> None:
     from app import models  # noqa: F401  (register tables)
 
-    models.configure_vector_column(pgvector_available())
+    configure_vector_column()
     Base.metadata.create_all(get_engine())
 
 

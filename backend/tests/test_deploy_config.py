@@ -104,3 +104,73 @@ def test_model_artifacts_load_without_the_original_files(db):
     emb.artifact_path = "missing/embedder.joblib"
     assert active_classifier(db).version == clf.version
     assert active_embedder(db).version == emb.version
+
+
+def test_login_works_without_analysis_tables_or_model_artifacts(monkeypatch):
+    from fastapi.testclient import TestClient
+    from sqlalchemy import create_engine, inspect
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+
+    from app.db import Base, get_db
+    from app.main import app
+    from app.models import AuditLog, Role, User
+    from app.security import ROLE_PERMISSIONS, hash_password
+
+    monkeypatch.setenv("VERCEL", "1")
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine, tables=[Role.__table__, User.__table__, AuditLog.__table__])
+    assert not inspect(engine).has_table("model_artifacts")
+    assert not inspect(engine).has_table("model_versions")
+    make_session = sessionmaker(bind=engine)
+    with make_session() as db:
+        role = Role(name="HSE_ADMIN", label="HSE Admin", permissions=ROLE_PERMISSIONS["HSE_ADMIN"])
+        db.add(role)
+        db.flush()
+        db.add(User(username="admin", full_name="HSE Admin (demo)", password_hash=hash_password("Admin@2026"), role_id=role.id))
+        db.commit()
+
+    def isolated_db():
+        with make_session() as db:
+            yield db
+
+    app.dependency_overrides[get_db] = isolated_db
+    try:
+        with TestClient(app) as client:
+            assert client.post("/api/auth/login", json={"username": "admin", "password": "wrong"}).status_code == 401
+            response = client.post("/api/auth/login", json={"username": "admin", "password": "Admin@2026"})
+            assert response.status_code == 200
+            assert response.json()["user"]["username"] == "admin"
+            assert "pv_session" in response.cookies
+            me = client.get("/api/auth/me")
+            assert me.status_code == 200
+            assert me.json()["user"]["username"] == "admin"
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+        engine.dispose()
+
+
+def test_requests_bind_pgvector_without_init_db(seeded, monkeypatch):
+    """Vercel never runs init_db. Unless requests configure embeddings.vector, psycopg's
+    text form of a pgvector value ("[0.12,...]") fails to load and /similar returns 500."""
+    from sqlalchemy.dialects import postgresql
+
+    from app import db as dbmod
+    from app import models
+    from app.models import Embedding
+
+    vector_type = Embedding.__table__.c.vector.type
+    monkeypatch.setattr(models, "_USE_PGVECTOR", False)
+    monkeypatch.setattr(dbmod, "_vector_column_configured", False)
+    with pytest.raises(ValueError):
+        vector_type._cached_result_processor(postgresql.psycopg.dialect(), None)("[0.12,-0.5,0.3]")
+
+    checks = []
+    monkeypatch.setattr(dbmod, "pgvector_available", lambda: checks.append(1) or True)
+    for _ in range(3):
+        sessions = dbmod.get_db()
+        next(sessions)
+        sessions.close()
+    assert checks == [1]
+    load = vector_type._cached_result_processor(postgresql.psycopg.dialect(), None)
+    assert load("[0.12,-0.5,0.3]") == pytest.approx([0.12, -0.5, 0.3])

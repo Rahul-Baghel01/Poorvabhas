@@ -1,6 +1,6 @@
 # Vercel deployment
 
-Poorvabhas uses one Vercel project with two [Services](https://vercel.com/docs/services). The project root is the repository root. `frontend/` builds as Next.js, and `backend/` builds with Vercel's native FastAPI/Python runtime using `app.main:app`. Root `vercel.json` sends `/api/*` to FastAPI and all other requests to Next.js. The backend receives the original `/api/...` path. The browser always requests same-origin `/api/...`; no Render URL or public API base variable is built into the UI. Do not set a Vercel project Root Directory of `frontend` or `backend`.
+Poorvabhas uses one Vercel project with two [Services](https://vercel.com/docs/services). The project root is the repository root. `frontend/` builds as Next.js, and `backend/` builds with Vercel's native FastAPI/Python runtime using `app.main:app`. Root `vercel.json` sends `/api/*` to FastAPI and all other requests to Next.js. The backend receives the original `/api/...` path. The browser requests same-origin `/api/...` when `NEXT_PUBLIC_API_URL=/api`. Do not set a Vercel project Root Directory of `frontend` or `backend`.
 
 ## Before linking the project
 
@@ -23,10 +23,12 @@ The initializer can take longer than a normal HTTP request. Run it in this local
 
 ## Vercel project settings
 
-Connect `Rahul-Baghel01/Poorvabhas`, production branch `main`, with project root `./` (repository root). Do not override the build command or the two service roots in `vercel.json`. Set these environment variables in Vercel's dashboard for Production and any Preview deployment that should access a database:
+Connect `Rahul-Baghel01/Poorvabhas`, production branch `main`, with Root Directory `./` (repository root) and Framework Preset **Services** under Project Settings > Build and Deployment. Both settings are required for Vercel to read the root `vercel.json` and build its two services. Ensure the deployed Git commit contains that file. Do not override the build command or the two service roots in `vercel.json`. Set these environment variables in Vercel's dashboard for Production and any Preview deployment that should access a database:
 
 | Variable | Value |
 | --- | --- |
+| `NEXT_PUBLIC_API_URL` | `/api` |
+| `API_URL` | `/api` |
 | `DATABASE_URL` | Externally reachable PostgreSQL URL, with TLS as required by the provider. Keep it secret. |
 | `SECRET_KEY` | A long random value; use the same value during initialization and across deployments so sessions remain valid. Keep it secret. |
 | `ENVIRONMENT` | `production` |
@@ -38,7 +40,7 @@ Connect `Rahul-Baghel01/Poorvabhas`, production branch `main`, with project root
 | `USE_TRANSFORMER` | `false` unless the optional transformer dependencies and local model are deployed separately |
 | `MODEL_PATH` | `/tmp/poorvabhas-models` (optional; this is the Vercel default) |
 
-`CORS_ORIGINS` and `API_URL` are for standalone local development and should not be set in Vercel. `NEXT_PUBLIC_API_URL` is no longer used. `ACCESS_TOKEN_MINUTES` and `SEED_RANDOM_STATE` have safe code defaults; set them only if you intentionally need different behavior. `POSTGRES_*` variables belong to Docker Compose, not the Vercel project.
+`NEXT_PUBLIC_API_URL=/api` keeps browser calls on the Vercel domain. `API_URL=/api` matches the Vercel project setting; the Next.js proxy is disabled when `VERCEL` is set, so Vercel Services handles these requests. For standalone local development and Docker, retain the existing `API_URL` backend origin from the local environment or Compose configuration. `CORS_ORIGINS` is for standalone local development. `ACCESS_TOKEN_MINUTES` and `SEED_RANDOM_STATE` have safe code defaults; set them only if you intentionally need different behavior. `POSTGRES_*` variables belong to Docker Compose, not the Vercel project.
 
 The FastAPI service performs no database initialization, synthetic seeding, model training, pattern mining, or spaCy warm-up on Vercel startup. `/api/health` only runs a `SELECT 1` database check. The classifier and embedder are trained by explicit initialization or the existing authorized model action, and their joblib artifacts are stored in PostgreSQL. A function may use `/tmp` as a cache, but PostgreSQL is the durable copy. The model format is trusted application data; do not load artifacts from untrusted sources. CSV validation tokens and their rows are also stored in PostgreSQL, tied to the validating user, and expire after 30 minutes.
 

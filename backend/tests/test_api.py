@@ -154,6 +154,16 @@ def test_csv_missing_columns(client, admin):
     assert r.status_code == 422 and "Missing required column" in r.json()["detail"]
 
 
+def test_csv_validation_token_belongs_to_its_user(client, admin, officer):
+    owned_csv = CSV.replace("T-CSV-1", "T-CSV-OWN-1").replace("T-CSV-2", "T-CSV-OWN-2")
+    result = client.post("/api/imports/validate", files={"file": ("reports.csv", owned_csv, "text/csv")}, headers=officer)
+    assert result.status_code == 200
+    token = result.json()["token"]
+    assert client.post(f"/api/imports/{token}/commit", headers=admin).status_code == 404
+    committed = client.post(f"/api/imports/{token}/commit", headers=officer)
+    assert committed.status_code == 200 and committed.json()["imported"] == 2
+
+
 def test_taxonomy_update_is_audited(client, admin):
     r = client.put("/api/taxonomy/HOT_WORK", json={"keywords": ["hot work", "welding", "brazing"], "weight": 1.2}, headers=admin)
     assert r.status_code == 200 and r.json()["weight"] == 1.2

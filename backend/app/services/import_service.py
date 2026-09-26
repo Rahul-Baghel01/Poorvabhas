@@ -10,15 +10,16 @@ import uuid
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.models import Report, Site
+from app.models import PendingImport, Report, Site
 
 REQUIRED_COLUMNS = ["report_id", "report_type", "date", "site", "location", "activity", "equipment", "description"]
 OPTIONAL_COLUMNS = ["worker_role", "contractor", "injury_severity", "shift", "weather"]
 MAX_ROWS = 5000
-MAX_BYTES = 5 * 1024 * 1024
+# Vercel Functions cap the whole multipart request at 4.5 MB.
+MAX_BYTES = 4 * 1024 * 1024
 TYPE_ALIASES = {
     "unsafe act": "Unsafe Act", "ua": "Unsafe Act",
     "unsafe condition": "Unsafe Condition", "uc": "Unsafe Condition",
@@ -27,7 +28,6 @@ TYPE_ALIASES = {
 }
 DATE_FORMATS = ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%Y/%m/%d", "%d.%m.%Y", "%d %b %Y", "%d %B %Y")
 
-_PENDING: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 TTL_SECONDS = 1800
 
 
@@ -45,7 +45,7 @@ def _norm_header(h: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", (h or "").strip().lower()).strip("_")
 
 
-def validate_csv(db: Session, content: bytes) -> dict[str, Any]:
+def validate_csv(db: Session, content: bytes, user_id: int) -> dict[str, Any]:
     if len(content) > MAX_BYTES:
         return {"ok": False, "error": f"File exceeds {MAX_BYTES // (1024 * 1024)} MB limit"}
     try:
@@ -104,9 +104,8 @@ def validate_csv(db: Session, content: bytes) -> dict[str, Any]:
 
     token = uuid.uuid4().hex
     now = time.time()
-    for k in [k for k, (t, _) in _PENDING.items() if now - t > TTL_SECONDS]:
-        _PENDING.pop(k, None)
-    _PENDING[token] = (now, valid)
+    db.execute(delete(PendingImport).where(PendingImport.created_at_epoch < now - TTL_SECONDS))
+    db.add(PendingImport(token=token, user_id=user_id, created_at_epoch=now, rows=valid))
     return {
         "ok": True,
         "token": token,
@@ -121,11 +120,14 @@ def validate_csv(db: Session, content: bytes) -> dict[str, Any]:
     }
 
 
-def take_pending(token: str) -> list[dict[str, Any]] | None:
-    item = _PENDING.pop(token, None)
-    if not item or time.time() - item[0] > TTL_SECONDS:
+def take_pending(db: Session, token: str, user_id: int) -> list[dict[str, Any]] | None:
+    item = db.scalars(select(PendingImport).where(PendingImport.token == token, PendingImport.user_id == user_id).with_for_update()).first()
+    if not item or time.time() - item.created_at_epoch > TTL_SECONDS:
         return None
-    return item[1]
+    rows = item.rows
+    db.delete(item)
+    db.flush()
+    return rows
 
 
 def get_or_create_site(db: Session, name: str) -> Site:

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
+from io import BytesIO
+import logging
 from typing import Any
 
 from sqlalchemy import func, select, update
@@ -16,6 +18,7 @@ from app.models import (
     Entity,
     EvidenceSpan,
     ModelVersion,
+    ModelArtifact,
     Pattern,
     Report,
     ReportAnalysis,
@@ -25,7 +28,7 @@ from app.models import (
     TaxonomyRule,
     User,
 )
-from app.nlp.classifier import LSAEmbedder, SafetyClassifier, build_model_text, load_classifier
+from app.nlp.classifier import LSAEmbedder, SafetyClassifier, TfidfLogRegClassifier, build_model_text, load_classifier
 from app.nlp.extraction import ExtractionResult
 from app.nlp.iogp import MappingResult
 from app.nlp.pipeline import AnalysisOutput, AnalysisPipeline, ContextInfo
@@ -37,6 +40,9 @@ STATUS_AI = "AI_ANALYZED"
 STATUS_REVIEW = "REVIEW_REQUIRED"
 STATUS_CONFIRMED = "HUMAN_CONFIRMED"
 STATUS_REJECTED = "HUMAN_REJECTED"
+_db_classifiers: dict[str, SafetyClassifier] = {}
+_db_embedders: dict[str, LSAEmbedder] = {}
+log = logging.getLogger(__name__)
 
 
 def rules_from_db(db: Session) -> list[dict[str, Any]]:
@@ -70,12 +76,48 @@ def active_classifier(db: Session) -> SafetyClassifier | None:
     mv = active_model(db, "sif_classifier")
     if not mv:
         return None
-    return _cached_classifier(get_settings().model_path, mv.artifact_path)
+    local = _cached_classifier(get_settings().model_path, mv.artifact_path)
+    if local:
+        return local
+    if mv.version not in _db_classifiers:
+        artifact = db.get(ModelArtifact, mv.version)
+        if not artifact:
+            return None
+        try:
+            import joblib
+
+            data = joblib.load(BytesIO(artifact.payload))
+            clf = TfidfLogRegClassifier.__new__(TfidfLogRegClassifier)
+            clf.version = data["version"]
+            clf.vectorizer = data["vectorizer"]
+            clf.model = data["model"]
+            clf.params = data.get("params", {})
+            _db_classifiers[mv.version] = clf
+        except Exception:
+            log.exception("Classifier artifact %s could not be loaded", mv.version)
+            return None
+    return _db_classifiers[mv.version]
 
 
 def active_embedder(db: Session) -> LSAEmbedder | None:
     mv = active_model(db, "embedder")
-    return _cached_embedder(mv.artifact_path) if mv and mv.artifact_path else None
+    if not mv:
+        return None
+    local = _cached_embedder(mv.artifact_path) if mv.artifact_path else None
+    if local:
+        return local
+    if mv.version not in _db_embedders:
+        artifact = db.get(ModelArtifact, mv.version)
+        if not artifact:
+            return None
+        try:
+            import joblib
+
+            _db_embedders[mv.version] = joblib.load(BytesIO(artifact.payload))
+        except Exception:
+            log.exception("Embedder artifact %s could not be loaded", mv.version)
+            return None
+    return _db_embedders[mv.version]
 
 
 def build_pipeline(db: Session, classifier: SafetyClassifier | None | bool = True) -> AnalysisPipeline:

@@ -162,7 +162,7 @@ XGBoost was not needed: the classifier's job is a transparent second opinion and
 
 ## Database
 
-19 tables — `users`, `roles`, `sites`, `reports`, `report_analysis`, `entities`, `evidence_spans`, `scl_classifications`, `taxonomy_rules`, `rule_mappings`, `patterns`, `pattern_reports`, `review_queue`, `review_decisions`, `feedback_examples`, `model_versions`, `embeddings` (pgvector `vector(64)`), `audit_logs`, `dashboard_snapshots` — plus `system_settings`. Tables are created automatically on startup. See [docs/data-model.md](docs/data-model.md).
+The PostgreSQL schema includes reports, analyses, review decisions, model versions and artifacts, pending CSV imports, embeddings (pgvector `vector(64)` when available), audit logs, and settings. Local startup can initialize the schema; Vercel requires the explicit one-time initializer described in [docs/vercel-deployment.md](docs/vercel-deployment.md). See [docs/data-model.md](docs/data-model.md).
 
 ## API
 
@@ -201,6 +201,8 @@ npm run dev                              # http://localhost:3000, proxies /api �
 ```
 
 ## Docker
+
+For a single-project Vercel deployment of the existing frontend and FastAPI backend, see [docs/vercel-deployment.md](docs/vercel-deployment.md). The Docker workflow below remains available for local development.
 
 `docker-compose.yml` runs three services:
 
@@ -246,7 +248,7 @@ Playwright covers: the critical create → analyse → review → decision → a
 - **SCL judgement.** Whether a control is "direct" is simplified (e.g. PPE and permits are treated as administrative). Borderline definitions need HSE expert calibration.
 - **Crosswalk.** The SCL-to-IOGP mapping is our proposal and has not been validated by IOGP or OIL experts.
 - **Exposure denominators** for sites are synthetic; activities and locations are ranked by rate only.
-- **Single-process import cache.** CSV validation tokens live in memory, so run one backend worker (or move them to Redis) for multi-worker deployments.
+- **CSV import limits.** Validation sessions are stored in PostgreSQL so they survive multiple backend instances. Files are limited to 4 MB to fit Vercel's request limit; large analyses may still need smaller batches or a persistent worker.
 
 ## Future pilot
 

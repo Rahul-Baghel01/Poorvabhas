@@ -20,6 +20,9 @@ def configure_engine(url: str | None = None) -> Engine:
     global _engine, _SessionLocal
     url = url or get_settings().database_url
     kwargs: dict = {"pool_pre_ping": True, "future": True}
+    if url.startswith("postgresql"):
+        # Fail health checks promptly when an external database is unreachable.
+        kwargs["connect_args"] = {"connect_timeout": 3}
     if url.startswith("sqlite"):
         from sqlalchemy.pool import StaticPool
 

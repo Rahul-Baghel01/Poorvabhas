@@ -82,6 +82,8 @@ Decision body:
 | POST | `/imports/validate` | multipart `file` → `{token, rows_detected, valid_rows, invalid_rows, errors[], preview[], new_sites[]}` |
 | POST | `/imports/{token}/commit` | store + analyse valid rows, re-mine patterns → `{imported, analyzed, sif_signal, review_required, report_ids}` |
 
+CSV files are limited to 4 MB on Vercel. Validation tokens are stored in PostgreSQL, belong to the validating user, and expire after 30 minutes.
+
 ## Administration
 
 | Method | Path | Perm | Notes |

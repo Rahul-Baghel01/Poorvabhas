@@ -16,7 +16,7 @@ from app.analytics.patterns import mine_patterns
 from app.audit import log_event
 from app.config import get_settings
 from app.db import Base, get_engine, init_db, session_factory
-from app.models import DashboardSnapshot, Report, Role, Site, TaxonomyRule, User
+from app.models import DashboardSnapshot, ModelArtifact, Report, Role, Site, TaxonomyRule, User
 from app.nlp.iogp import DEFAULT_RULES
 from app.security import ROLE_PERMISSIONS, hash_password
 from app.seed.generator import SITES, generate_reports
@@ -102,7 +102,11 @@ def ensure_model_artifacts(db: Session, verbose: bool = True) -> None:
 
     for component in ("embedder", "sif_classifier"):
         mv = active_model(db, component)
+        if mv and db.get(ModelArtifact, mv.version):
+            continue
         if mv and mv.artifact_path and Path(mv.artifact_path).exists():
+            db.add(ModelArtifact(version=mv.version, payload=Path(mv.artifact_path).read_bytes()))
+            db.flush()
             continue
         if verbose:
             print(f"  {component} artefact missing - retraining")

@@ -41,7 +41,7 @@ The pipeline is **pure**: it takes a report dict and returns an `AnalysisOutput`
 
 ## 4. Presentation (`frontend/`)
 
-Next.js App Router. The browser only talks to same-origin `/api/*`; `next.config.ts` rewrites those calls to FastAPI, so the httpOnly session cookie stays first-party and no CORS is needed. TanStack Query caches server state; every write invalidates the affected queries (`lib/hooks.ts::useInvalidateAll`), so the dashboard updates after a new report, an import or a review decision.
+Next.js App Router. The browser only talks to same-origin `/api/*`; `next.config.ts` proxies those calls to FastAPI in standalone local development, while Vercel Services routes them directly to the FastAPI service. The httpOnly session cookie stays first-party. TanStack Query caches server state; every write invalidates the affected queries (`lib/hooks.ts::useInvalidateAll`), so the dashboard updates after a new report, an import or a review decision.
 
 ```
 app/login                 sign-in + product story

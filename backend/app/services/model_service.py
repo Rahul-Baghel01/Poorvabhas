@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import hashlib
+from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any
 
@@ -19,9 +20,9 @@ from sqlalchemy.orm import Session
 
 from app.audit import log_event
 from app.config import get_settings
-from app.models import FeedbackExample, ModelVersion, Report, ReportAnalysis, User
+from app.models import FeedbackExample, ModelArtifact, ModelVersion, Report, ReportAnalysis, User
 from app.nlp.classifier import LSAEmbedder, TfidfLogRegClassifier, build_model_text
-from app.services.analysis_service import _cached_classifier, _cached_embedder, report_to_dict
+from app.services.analysis_service import _cached_classifier, _cached_embedder, _db_classifiers, _db_embedders, report_to_dict
 
 SYNTHETIC_BASIS = (
     "Held-out 25% split of the SYNTHETIC demo dataset, scored against reference labels assigned by scenario "
@@ -111,12 +112,14 @@ def train_classifier(db: Session, actor: User | None = None, note: str | None = 
         basis = SYNTHETIC_BASIS
 
     path = clf.save(get_settings().model_path)
+    db.add(ModelArtifact(version=version, payload=Path(path).read_bytes()))
     db.execute(update(ModelVersion).where(ModelVersion.component == "sif_classifier").values(is_active=False))
     mv = ModelVersion(version=version, component="sif_classifier", algorithm="TF-IDF (1-2 gram) + Logistic Regression (class-balanced)", params=clf.params, metrics=metrics, evaluation_basis=basis, n_train=len(X_reports), n_test=len(labelled_test), artifact_path=path, is_active=True,
                       notes=(note or "") + f" Trained on {len(X_reports) - n_fb} synthetic reference labels + {n_fb} human feedback labels.")
     db.add(mv)
     db.execute(update(FeedbackExample).where(FeedbackExample.used_in_model_version.is_(None)).values(used_in_model_version=version))
     _cached_classifier.cache_clear()
+    _db_classifiers.clear()
     log_event(db, "MODEL_CHANGED", f"Classifier {version} trained ({len(X_reports)} examples) and activated", entity_type="model", entity_id=version, actor=actor, details={"n_train": len(X_reports), "n_feedback": n_fb, "metrics": metrics})
     return mv, oof
 
@@ -127,10 +130,12 @@ def fit_embedder(db: Session) -> ModelVersion:
     version = "emb-lsa64-" + datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")[:17]
     emb = LSAEmbedder(version=version).fit(texts)
     path = emb.save(get_settings().model_path)
+    db.add(ModelArtifact(version=version, payload=Path(path).read_bytes()))
     db.execute(update(ModelVersion).where(ModelVersion.component == "embedder").values(is_active=False))
     mv = ModelVersion(version=version, component="embedder", algorithm="TF-IDF + TruncatedSVD (LSA), 64-d unit vectors", params={"dim": 64}, metrics=None, evaluation_basis=None, n_train=len(texts), artifact_path=path, is_active=True, notes="Used for similar-report retrieval (pgvector cosine distance).")
     db.add(mv)
     _cached_embedder.cache_clear()
+    _db_embedders.clear()
     return mv
 
 

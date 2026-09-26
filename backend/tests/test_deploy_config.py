@@ -89,3 +89,18 @@ def test_health_returns_503_when_database_unavailable(client, monkeypatch):
     assert body["status"] == "degraded" and body["database"] == "unavailable"
     text = r.text.lower()
     assert "postgres" not in text and "password" not in text and "secret" not in text
+
+
+def test_model_artifacts_load_without_the_original_files(db):
+    from app.models import ModelArtifact
+    from app.services.analysis_service import active_classifier, active_embedder, active_model
+
+    clf = active_model(db, "sif_classifier")
+    emb = active_model(db, "embedder")
+    assert clf and emb
+    assert db.get(ModelArtifact, clf.version)
+    assert db.get(ModelArtifact, emb.version)
+    clf.artifact_path = "missing/classifier.joblib"
+    emb.artifact_path = "missing/embedder.joblib"
+    assert active_classifier(db).version == clf.version
+    assert active_embedder(db).version == emb.version

@@ -17,6 +17,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -371,6 +372,14 @@ class ModelVersion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class ModelArtifact(Base):
+    """Persist trained joblib files across ephemeral function instances."""
+
+    __tablename__ = "model_artifacts"
+    version: Mapped[str] = mapped_column(String(60), primary_key=True)
+    payload: Mapped[bytes] = mapped_column(LargeBinary)
+
+
 class Embedding(Base):
     __tablename__ = "embeddings"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -411,6 +420,16 @@ class SystemSetting(Base):
     value: Mapped[Any] = mapped_column(JSON)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
     updated_by: Mapped[str | None] = mapped_column(String(80), nullable=True)
+
+
+class PendingImport(Base):
+    """Validated CSV rows must survive requests served by different instances."""
+
+    __tablename__ = "pending_imports"
+    token: Mapped[str] = mapped_column(String(40), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at_epoch: Mapped[float] = mapped_column(Float)
+    rows: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
 
 
 Index("ix_reports_site_date", Report.site_id, Report.date)

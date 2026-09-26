@@ -1,4 +1,5 @@
 from functools import lru_cache
+import os
 from pathlib import Path
 
 from pydantic import field_validator, model_validator
@@ -37,7 +38,7 @@ class Settings(BaseSettings):
     secret_key: str = DEV_SECRET_KEY
     environment: str = "demo"
     demo_mode: bool = True
-    model_path: str = str(Path(__file__).resolve().parent.parent / "models_store")
+    model_path: str = str(Path("/tmp/poorvabhas-models") if os.environ.get("VERCEL") else Path(__file__).resolve().parent.parent / "models_store")
     vector_backend: str = "auto"  # auto | pgvector | json
     cors_origins: str = "http://localhost:3000"
     access_token_minutes: int = 60 * 12

@@ -1,6 +1,6 @@
 # Data model
 
-PostgreSQL 16 with the `vector` extension (pgvector). The same SQLAlchemy models run on SQLite in unit tests (the embedding column falls back to a JSON array). Tables are created on startup (`db.init_db`). Source: `backend/app/models.py`.
+PostgreSQL 16 with the `vector` extension (pgvector). The same SQLAlchemy models run on SQLite in unit tests (the embedding column falls back to a JSON array). Local startup initializes tables with `db.init_db`; Vercel requires the explicit initializer in [vercel-deployment.md](vercel-deployment.md). Source: `backend/app/models.py`.
 
 ## Entity overview
 
@@ -35,6 +35,8 @@ taxonomy_rules · model_versions · audit_logs · dashboard_snapshots · system_
 | `review_decisions` | every decision | `action`, `original_prediction`, `decision`, `reviewer_id`, `reviewer_name`, `reason`, `note`, `created_at` |
 | `feedback_examples` | training signal | `text`, `label_*`, `predicted_*`, `is_correction`, `used_in_model_version` |
 | `model_versions` | engine / classifier / embedder versions | `version`, `component`, `algorithm`, `params`, `metrics` (null until computed), `evaluation_basis`, `n_train`, `n_test`, `artifact_path`, `is_active` |
+| `model_artifacts` | durable classifier and embedder joblib bytes across backend instances | `version`, `payload` |
+| `pending_imports` | validated CSV rows and one-use tokens, tied to a user | `token`, `user_id`, `created_at_epoch`, `rows` |
 | `embeddings` | similarity vectors | `report_id`, `model`, `vector` (pgvector `vector(64)`) |
 | `audit_logs` | traceability | `event_type`, `entity_type`, `entity_id`, `actor_name`, `summary`, `details`, `created_at` |
 | `dashboard_snapshots` | KPI snapshots at key events | `trigger`, `payload` |

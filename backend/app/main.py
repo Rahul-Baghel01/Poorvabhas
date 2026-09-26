@@ -1,4 +1,5 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -19,10 +20,11 @@ validate_production_settings(get_settings())
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     s = get_settings()
-    from app.nlp.normalize import sentence_segments
+    if not os.environ.get("VERCEL"):
+        from app.nlp.normalize import sentence_segments
 
-    sentence_segments("Warm-up sentence. Loads the spaCy sentencizer once.")
-    if s.auto_seed:
+        sentence_segments("Warm-up sentence. Loads the spaCy sentencizer once.")
+    if s.auto_seed and not os.environ.get("VERCEL"):
         try:
             from app.seed.seed import seed_all
 
@@ -33,7 +35,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Poorvabhas API", version="1.0.0", description="SIF-precursor decision support. Demo environment - synthetic safety data.", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=get_settings().cors_origin_list, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+if not os.environ.get("VERCEL"):
+    app.add_middleware(CORSMiddleware, allow_origins=get_settings().cors_origin_list, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 
 @app.exception_handler(OperationalError)

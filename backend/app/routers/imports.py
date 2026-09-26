@@ -10,7 +10,7 @@ from app.db import get_db
 from app.models import Report, User
 from app.security import require_permission
 from app.services.analysis_service import analyze_and_store, build_pipeline
-from app.services.import_service import OPTIONAL_COLUMNS, REQUIRED_COLUMNS, get_or_create_site, take_pending, validate_csv
+from app.services.import_service import MAX_BYTES, OPTIONAL_COLUMNS, REQUIRED_COLUMNS, get_or_create_site, take_pending, validate_csv
 
 router = APIRouter(prefix="/api/imports", tags=["imports"])
 
@@ -27,19 +27,20 @@ def template(_: User = Depends(require_permission("import"))):
 
 
 @router.post("/validate")
-async def validate(file: UploadFile = File(...), db: Session = Depends(get_db), _: User = Depends(require_permission("import"))):
+async def validate(file: UploadFile = File(...), db: Session = Depends(get_db), user: User = Depends(require_permission("import"))):
     if not (file.filename or "").lower().endswith(".csv"):
         raise HTTPException(422, "Upload a .csv file")
-    content = await file.read()
-    result = validate_csv(db, content)
+    content = await file.read(MAX_BYTES + 1)
+    result = validate_csv(db, content, user.id)
     if not result.get("ok"):
         raise HTTPException(422, result.get("error", "Invalid CSV"))
+    db.commit()
     return {**result, "filename": file.filename}
 
 
 @router.post("/{token}/commit")
 def commit(token: str, db: Session = Depends(get_db), user: User = Depends(require_permission("import"))):
-    rows = take_pending(token)
+    rows = take_pending(db, token, user.id)
     if rows is None:
         raise HTTPException(404, "Import session expired - validate the file again")
     t0 = time.time()

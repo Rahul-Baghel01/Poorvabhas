@@ -8,18 +8,19 @@ export function cn(...inputs: ClassValue[]) {
 export type Tone = "red" | "amber" | "cyan" | "green" | "neutral" | "red-deep";
 
 export const SIF_SIGNAL_META: Record<string, { label: string; short: string; tone: Tone; color: string }> = {
-  SIF_EVENT: { label: "SIF event", short: "SIF EVENT", tone: "red-deep", color: "#C9362D" },
-  SIF_POTENTIAL: { label: "SIF potential", short: "SIF POTENTIAL", tone: "red", color: "#FF4A43" },
+  SIF_EVENT: { label: "SIF Event", short: "SIF EVENT", tone: "red-deep", color: "#C9362D" },
+  SIF_POTENTIAL: { label: "SIF-potential", short: "SIF-POTENTIAL", tone: "red", color: "#FF4A43" },
   UNDETERMINED: { label: "Undetermined", short: "UNDETERMINED", tone: "amber", color: "#F2B233" },
   NON_SIF: { label: "Non-SIF", short: "NON-SIF", tone: "neutral", color: "#6B7678" },
   PENDING: { label: "Pending", short: "PENDING", tone: "neutral", color: "#6B7678" },
 };
 
 export const STATUS_META: Record<string, { label: string; tone: Tone }> = {
-  AI_ANALYZED: { label: "AI analyzed", tone: "cyan" },
+  // Stored status values are unchanged; HUMAN_REJECTED means the reviewer overturned the engine output.
+  AI_ANALYZED: { label: "Engine analyzed", tone: "cyan" },
   REVIEW_REQUIRED: { label: "Review required", tone: "amber" },
-  HUMAN_CONFIRMED: { label: "Human confirmed", tone: "green" },
-  HUMAN_REJECTED: { label: "Human rejected", tone: "red" },
+  HUMAN_CONFIRMED: { label: "Expert confirmed", tone: "green" },
+  HUMAN_REJECTED: { label: "Expert corrected", tone: "green" },
   PENDING: { label: "Pending", tone: "neutral" },
 };
 
@@ -37,7 +38,7 @@ export const SCL_META: Record<string, { label: string; description: string }> = 
   CAPACITY: { label: "Capacity", description: "High-energy incident absorbed by a direct control" },
   SUCCESS: { label: "Success", description: "High energy controlled by a direct control" },
   LSIF: { label: "LSIF", description: "Serious injury from low energy" },
-  LOW_SEVERITY: { label: "Low severity", description: "Low energy, no serious injury" },
+  LOW_SEVERITY: { label: "Low Severity", description: "Low energy, no serious injury" },
   UNDETERMINED: { label: "Undetermined", description: "Evidence insufficient to resolve the SCL path" },
 };
 
@@ -59,8 +60,25 @@ export const REVIEW_CATEGORY_META: Record<string, { label: string; hint: string 
   BORDERLINE: { label: "Borderline", hint: "A decision gate rests on weak evidence" },
   INSUFFICIENT_INFORMATION: { label: "Insufficient information", hint: "Required facts are not stated" },
   RULE_CONFLICT: { label: "Rule conflict", hint: "Conflicting controls or ambiguous rule mapping" },
-  MODEL_RULE_DISAGREEMENT: { label: "Model / rule disagreement", hint: "Classifier disagrees with the SCL engine" },
+  MODEL_RULE_DISAGREEMENT: { label: "Classifier / engine disagreement", hint: "Classifier disagrees with the SCL engine" },
   MANUAL_REQUEST: { label: "Manual request", hint: "Sent to reviewer by an HSE officer" },
+};
+
+/** Display names for the stored audit event codes (codes are unchanged for traceability). */
+export const EVENT_LABELS: Record<string, string> = {
+  REPORT_CREATED: "Report created",
+  REPORT_ANALYZED: "Report analyzed",
+  SIF_CLASSIFIED: "SCL classified",
+  RULE_MAPPED: "LSR mapped",
+  REVIEW_STARTED: "Review requested / note",
+  REVIEW_COMPLETED: "Review decision",
+  TAXONOMY_CHANGED: "Taxonomy updated",
+  SETTINGS_CHANGED: "Settings updated",
+  MODEL_CHANGED: "Model retrained / re-analysis",
+  PATTERNS_MINED: "Patterns mined",
+  IMPORT_COMPLETED: "Import completed",
+  DATASET_SEEDED: "Synthetic dataset seeded",
+  USER_LOGIN: "Sign-in",
 };
 
 export const TREND_META: Record<string, { label: string; tone: Tone }> = {

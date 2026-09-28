@@ -1,6 +1,6 @@
 # API
 
-Base URL: `http://localhost:8000/api` (the frontend calls the same paths via `/api` on port 3000). Interactive docs: `http://localhost:8000/docs`.
+Base URL: production `https://poorvabhas.vercel.app/api` (same-origin; Vercel routes `/api/*` to FastAPI). Locally `http://localhost:8000/api` (the frontend calls the same paths via `/api` on port 3000), with interactive docs at `http://localhost:8000/docs`.
 
 **Authentication.** `POST /api/auth/login` sets an httpOnly `pv_session` cookie and also returns a `token`; send `Authorization: Bearer <token>` from scripts. Errors use `{"detail": "..."}`: 401 unauthenticated, 403 wrong role, 404 not found, 409 conflict, 422 validation, 503 database unavailable.
 
@@ -62,7 +62,7 @@ Decision body:
   "reason": "No pedestrian segregation", "note": "Traffic management action raised" }
 ```
 
-`action` ∈ `CONFIRM`, `REJECT`, `CHANGE`, `INSUFFICIENT`, `NOTE`. `REJECT` and `CHANGE` require `reason`; `NOTE` requires `note` and leaves the item open.
+`action` ∈ `CONFIRM`, `REJECT`, `CHANGE`, `INSUFFICIENT`, `NOTE`. `REJECT` and `CHANGE` require `reason`; `NOTE` requires `note` and leaves the item open. The UI offers Confirm (`CONFIRM`), Correct (`CHANGE`) and Refine (`INSUFFICIENT` or `NOTE`). A decision that changes the SCL class, SIF-potential or LSR sets status `HUMAN_REJECTED` (shown as "Expert corrected"); otherwise `HUMAN_CONFIRMED`.
 
 ## Analytics (O)
 

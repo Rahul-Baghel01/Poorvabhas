@@ -22,8 +22,8 @@ class InsecureConfigurationError(RuntimeError):
 
 
 def normalize_database_url(url: str) -> str:
-    """Hosting providers (e.g. Render) hand out postgres:// or postgresql:// URLs; SQLAlchemy
-    would pick the psycopg2 driver for those, but this app ships psycopg 3."""
+    """Providers such as Neon hand out postgres:// or postgresql:// URLs; SQLAlchemy would
+    pick the psycopg2 driver for those, but this app ships psycopg 3."""
     url = url.strip()
     for prefix in ("postgres://", "postgresql://"):
         if url.startswith(prefix):

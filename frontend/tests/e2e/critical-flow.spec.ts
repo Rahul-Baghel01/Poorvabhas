@@ -9,7 +9,8 @@ async function login(page: Page, user = "admin", pass = "Admin@2026") {
 }
 
 async function kpi(page: Page, label: string): Promise<number> {
-  const card = page.locator("main").getByRole("link", { name: new RegExp(`^${label}\\s+\\d`, "i") });
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const card = page.locator("main").getByRole("link", { name: new RegExp(`^${escaped}\\s+\\d`, "i") });
   await expect(card).toBeVisible();
   const text = await card.innerText();
   return Number(text.split("\n").map((s) => s.trim()).find((s) => /^\d+$/.test(s)));
@@ -22,8 +23,9 @@ test("critical flow: create → analyse → review → decision → audit → da
   await login(page);
   await page.getByLabel("Time window").selectOption("30");
   await expect(page.getByText("HSE intelligence / Last 30 days", { exact: false })).toBeVisible();
-  const totalBefore = await kpi(page, "Total reports");
-  const queueBefore = await kpi(page, "Review queue");
+  const totalBefore = await kpi(page, "Reports · last 30 days");
+  const queueBefore = await kpi(page, "Awaiting HSE review");
+  const reviewedBefore = await kpi(page, "Expert-reviewed cases · last 30 days");
 
   // 1. create report (demo case), analyse
   await page.goto("/reports/new");
@@ -47,37 +49,48 @@ test("critical flow: create → analyse → review → decision → audit → da
   await expect(scl.getByText("Direct control?").first()).toBeVisible();
   await expect(scl.getByText("No direct control or barrier is stated in the report.")).toBeVisible();
   await expect(scl.getByText("Undetermined").first()).toBeVisible();
+  await expect(scl.getByText("1 · High energy present?")).toBeVisible();
+  await expect(scl.getByText("2 · Direct control in place?")).toBeVisible();
+  await expect(scl.getByText(/does not contain enough evidence to answer both checks/)).toBeVisible();
   const iogp = page.locator("#iogp");
   await expect(iogp.getByText("Driving", { exact: true })).toBeVisible();
   await expect(iogp.getByText(/Requires independent HSE expert validation/)).toBeVisible();
   await expect(page.locator("#priority").getByText("/ 100")).toBeVisible();
+  const why = page.locator("#why");
+  await expect(why.getByText("Energy exposure")).toBeVisible();
+  await expect(why.getByText("Supporting report text").first()).toBeVisible();
+  await expect(page.locator("#coverage").getByText(/\/ \d+ SCL gates$/)).toBeVisible();
+  await expect(page.locator("#review").getByText("Pending HSE review")).toBeVisible();
 
   // 4. dashboard reflects the new report and the review item
   await page.goto("/");
   await page.getByLabel("Time window").selectOption("30");
-  await expect.poll(() => kpi(page, "Total reports")).toBe(totalBefore + 1);
-  await expect.poll(() => kpi(page, "Review queue")).toBe(queueBefore + 1);
+  await expect.poll(() => kpi(page, "Reports · last 30 days")).toBe(totalBefore + 1);
+  await expect.poll(() => kpi(page, "Awaiting HSE review")).toBe(queueBefore + 1);
 
   // 5. reviewer decision from the report page
   await page.goto(`/reports/${reportId}`);
   const review = page.locator("#review");
-  await review.getByText("Change", { exact: true }).click();
+  await review.getByText("Correct", { exact: true }).click();
   await review.getByLabel("SCL class").selectOption("EXPOSURE");
   await review.getByLabel(/Reason \(required\)/).fill("No pedestrian segregation at the gantry; no direct control existed.");
   await review.getByLabel("Note", { exact: true }).fill("Traffic management action raised (demo).");
   await review.getByRole("button", { name: "Record decision" }).click();
-  await expect(page.getByText("Human confirmed").first()).toBeVisible();
+  await expect(page.getByText("Expert corrected").first()).toBeVisible();
   await expect(page.getByText("Final decision: HSE reviewer")).toBeVisible();
+  await expect(review.getByText("Correction stored as feedback")).toBeVisible();
+  await expect(review.getByText("Controlled retraining / refinement")).toBeVisible();
 
   // 6. audit record
   const audit = page.locator("#audit");
-  await expect(audit.getByText(/REVIEW_COMPLETED/)).toBeVisible();
+  await expect(audit.getByText("Review decision").first()).toBeVisible();
   await expect(audit.getByText(/CHANGE · HSE Admin \(demo\)/)).toBeVisible();
 
   // 7. dashboard updates after review
   await page.goto("/");
   await page.getByLabel("Time window").selectOption("30");
-  await expect.poll(() => kpi(page, "Review queue")).toBe(queueBefore);
+  await expect.poll(() => kpi(page, "Awaiting HSE review")).toBe(queueBefore);
+  await expect.poll(() => kpi(page, "Expert-reviewed cases · last 30 days")).toBe(reviewedBefore + 1);
 
   expect(errors.filter((e) => !/favicon|Download the React DevTools/i.test(e))).toEqual([]);
 });
@@ -91,7 +104,7 @@ test("all routes render without errors", async ({ page }) => {
     ["/patterns", "Pattern explorer"],
     ["/import", "Import data"],
     ["/taxonomy", "Taxonomy"],
-    ["/review", "Review queue"],
+    ["/review", "HSE review queue"],
     ["/model", "Model / analysis"],
     ["/settings", "Settings"],
     ["/audit", "Audit log"],
@@ -114,7 +127,7 @@ test("report search and filters", async ({ page }) => {
   await expect(page.getByText(/^1 report$/)).toBeVisible();
   await page.goto("/reports?sif_signal=SIF_POTENTIAL");
   await expect(page.getByText(/reports?$/).first()).toBeVisible();
-  const badges = page.locator("tbody").getByText("SIF POTENTIAL");
+  const badges = page.locator("tbody").getByText("SIF-POTENTIAL");
   await expect(badges.first()).toBeVisible();
 });
 

@@ -144,6 +144,7 @@ export interface Decision {
   reason: string | null;
   note: string | null;
   created_at: string;
+  feedback?: { stored: boolean; is_correction: boolean } | null;
 }
 
 export interface Analysis {
@@ -312,6 +313,7 @@ export interface Dashboard {
     recurring_patterns: Kpi & { increasing: number };
     review_queue: Kpi;
     high_priority_signals: Kpi;
+    expert_reviewed: Kpi & { confirmed: number; corrected: number };
     lsr_coverage: Kpi & { mapped: number; sif_signals: number; rules_observed: number; rules_total: number };
   };
   priority_banner: { awaiting_human_validation: number; text: string | null };
@@ -321,7 +323,7 @@ export interface Dashboard {
   top_lsr: { code: string; name: string; count: number }[];
   top_activities: { activity: string; total: number; sif: number }[];
   top_sites: { site: string; total: number; sif: number }[];
-  patterns: { id: number; code: string; name: string; occurrences: number; trend: string; primary_lsr: string; lsr_name: string; sites: string[]; counts: number[] }[];
+  patterns: { id: number; code: string; name: string; occurrences: number; trend: string; primary_lsr: string; lsr_name: string; sites: string[]; activities: string[]; counts: number[] }[];
   review_queue: { review_id: number; report_id: string; category: string; priority_score: number; activity: string; site: string; scl_class: string; sif_signal: SifSignal }[];
   site_ranking: Ranking;
 }

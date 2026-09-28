@@ -222,7 +222,7 @@ export default function ImportPage() {
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                 <Stat label="Imported" value={c.imported} />
                 <Stat label="Analyzed" value={c.analyzed} tone="text-cyan" />
-                <Stat label="SIF signal" value={c.sif_signal} tone="text-red" />
+                <Stat label="SIF-potential / SIF Event" value={c.sif_signal} tone="text-red" />
                 <Stat label="Review required" value={c.review_required} tone="text-amber" />
               </div>
               <p className="mt-3 text-[12.5px] text-fg-2">

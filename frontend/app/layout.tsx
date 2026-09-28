@@ -9,7 +9,7 @@ const mono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500", "600"], 
 
 export const metadata: Metadata = {
   title: { default: "Poorvabhas — SIF precursor intelligence", template: "%s · Poorvabhas" },
-  description: "Sensing the fatality before it happens. Decision support for HSE teams - judge the hazard, not the outcome.",
+  description: "Detecting fatal potential before the outcome. Decision support for HSE teams - judge the hazard, not the outcome.",
   icons: { icon: "/favicon.svg" },
 };
 

@@ -45,10 +45,12 @@ taxonomy_rules · model_versions · audit_logs · dashboard_snapshots · system_
 ## Report status lifecycle
 
 ```
-PENDING → AI_ANALYZED ──(manual request)──▶ REVIEW_REQUIRED
-        └→ REVIEW_REQUIRED ──CONFIRM / CHANGE / INSUFFICIENT──▶ HUMAN_CONFIRMED
-                          └──REJECT──────────────────────────▶ HUMAN_REJECTED
+PENDING → AI_ANALYZED ("Engine analyzed") ──(manual request)──▶ REVIEW_REQUIRED ("Review required")
+        └→ REVIEW_REQUIRED ──decision leaves the engine result unchanged──▶ HUMAN_CONFIRMED ("Expert confirmed")
+                          └──decision changes SCL class / SIF-potential / LSR──▶ HUMAN_REJECTED ("Expert corrected")
 ```
+
+Stored status values are unchanged for compatibility with existing data; the UI labels are shown in quotes. Every decision except `NOTE` stores a labelled `feedback_examples` row (`is_correction` when the result changed). Retraining is an explicit admin action.
 
 Once `decision_source = HUMAN`, re-analysis updates the stored analysis (for traceability) but never overwrites the reviewer's SCL class, SIF potential or rule.
 

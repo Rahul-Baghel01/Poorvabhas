@@ -161,7 +161,7 @@ class AnalysisPipeline:
 
         reasons = route_review(scl, conf, mapping, ml_prob, self.review_thresholds, engine=self.scl_engine)
         category = primary_category(reasons)
-        stage("REVIEW_DECISION", f"Routed to human review: {category.replace('_', ' ').lower()}" if category else "No review trigger - AI analysed", {"review_required": bool(reasons), "category": category})
+        stage("REVIEW_DECISION", f"Routed to human review: {category.replace('_', ' ').lower()}" if category else "No review trigger - engine analysed", {"review_required": bool(reasons), "category": category})
 
         summary = self._summary(ex, scl, mapping, score, level)
         return AnalysisOutput(ex, scl, mapping, ml_prob, ml_version, ml_expl, conf, conf_level, conf_breakdown, score, level, breakdown, reasons, category, ctx, summary, trace, normalized)

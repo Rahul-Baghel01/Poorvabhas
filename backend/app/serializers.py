@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import AuditLog, Entity, EvidenceSpan, Pattern, PatternReport, Report, ReportAnalysis, ReviewDecision, ReviewItem, RuleMapping, User
+from app.models import AuditLog, Entity, EvidenceSpan, FeedbackExample, Pattern, PatternReport, Report, ReportAnalysis, ReviewDecision, ReviewItem, RuleMapping, User
 from app.nlp.iogp import CROSSWALK_DISCLAIMER, CROSSWALK_LABEL, DEFAULT_RULES
 from app.nlp.scl import SCL_DESCRIPTIONS, SCL_LABELS
 from app.nlp.scoring import REVIEW_CATEGORIES
@@ -136,7 +136,11 @@ def report_detail(db: Session, r: Report) -> dict[str, Any]:
         }
     open_item = db.scalars(select(ReviewItem).where(ReviewItem.report_id == r.id, ReviewItem.status == "OPEN")).first()
     out["review"] = review_item_out(open_item, a, include_evidence=False) if open_item else None
-    out["decisions"] = [decision_out(d) for d in db.scalars(select(ReviewDecision).where(ReviewDecision.report_id == r.id).order_by(ReviewDecision.created_at.desc())).all()]
+    feedback = {f.decision_id: f.is_correction for f in db.scalars(select(FeedbackExample).where(FeedbackExample.report_id == r.id)).all()}
+    out["decisions"] = [
+        {**decision_out(d), "feedback": {"stored": True, "is_correction": feedback[d.id]} if d.id in feedback else None}
+        for d in db.scalars(select(ReviewDecision).where(ReviewDecision.report_id == r.id).order_by(ReviewDecision.created_at.desc())).all()
+    ]
     out["audit"] = [audit_out(x) for x in db.scalars(select(AuditLog).where(AuditLog.entity_type == "report", AuditLog.entity_id == r.report_id).order_by(AuditLog.created_at.desc(), AuditLog.id.desc()).limit(50)).all()]
     pats = db.execute(select(Pattern).join(PatternReport, PatternReport.pattern_id == Pattern.id).where(PatternReport.report_id == r.id, Pattern.is_current.is_(True))).scalars().all()
     out["patterns"] = [{"id": p.id, "code": p.pattern_code, "name": p.name, "occurrences": p.occurrences, "trend": p.trend} for p in pats]

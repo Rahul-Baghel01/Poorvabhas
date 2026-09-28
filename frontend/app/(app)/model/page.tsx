@@ -96,7 +96,7 @@ function MetricGrid({ m }: { m: Binary }) {
   );
 }
 
-const FEEDBACK_FLOW = ["Prediction", "Confidence check", "Human review", "Correction", "Feedback example", "Dataset improvement", "Controlled retraining"];
+const FEEDBACK_FLOW = ["Engine classification", "Confidence check", "HSE review", "Stored correction", "Feedback example", "Dataset improvement", "Controlled retraining (admin action)"];
 
 export default function ModelPage() {
   const { can } = useAuth();
@@ -173,7 +173,7 @@ export default function ModelPage() {
         </ul>
       </Panel>
 
-      <Notice tone="amber" title="How to read these metrics">
+      <Notice tone="amber" title="Synthetic pipeline sanity check">
         All figures below are computed on the <strong>synthetic</strong> demo dataset against reference labels assigned by scenario design. They show the pipeline works end to end. They are <strong>not</strong> an estimate of real-world accuracy on OIL reports, which requires a labelled pilot dataset reviewed by HSE experts.
       </Notice>
 
@@ -201,6 +201,7 @@ export default function ModelPage() {
               <p className="text-[12.5px] text-fg-2">
                 {String(eh.abstained_to_review)} of {String(eh.n_labelled)} held-out labelled reports were routed to human review instead of being decided (abstention by design). SIF-potential agreement on decided reports:
               </p>
+              <p className="rounded-xs border border-amber/30 bg-amber/[0.06] px-2 py-1 text-[11.5px] text-amber">Synthetic scenario validation — not an estimate of real-world OIL performance.</p>
               {eh.sif_potential_on_decided ? <MetricGrid m={eh.sif_potential_on_decided as Binary} /> : <p className="text-muted">Evaluation pending</p>}
               <p className="text-[11.5px] leading-relaxed text-muted">{engine?.evaluation_basis}</p>
             </div>
@@ -212,6 +213,7 @@ export default function ModelPage() {
         <Panel title="SIF classifier (second opinion)" subtitle={clf ? `${clf.version} · ${clf.algorithm}` : "Not trained"} id="clf-eval" accent="cyan">
           {clf?.metrics ? (
             <div className="flex flex-col gap-4">
+              <p className="rounded-xs border border-amber/30 bg-amber/[0.06] px-2 py-1 text-[11.5px] text-amber">Synthetic scenario validation — not an estimate of real-world OIL performance.</p>
               <div>
                 <p className="label-tech mb-2">Synthetic held-out split (n={clf.n_test})</p>
                 <MetricGrid m={clf.metrics.synthetic_holdout as Binary} />

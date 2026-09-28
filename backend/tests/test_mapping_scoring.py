@@ -42,7 +42,7 @@ def test_no_rule_falls_back_and_is_labelled():
     m = primary("Faded signage at the entrance of the pump house.")
     assert m.primary.code == "PROCESS_SAFETY_NA"
     d = m.to_dict()
-    assert d["label"] == CROSSWALK_LABEL == "Proposed crosswalk"
+    assert d["label"] == CROSSWALK_LABEL == "Proposed IOGP LSR crosswalk"
     assert d["disclaimer"] == CROSSWALK_DISCLAIMER == "Requires independent HSE expert validation"
 
 

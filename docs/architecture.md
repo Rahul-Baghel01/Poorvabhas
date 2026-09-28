@@ -64,4 +64,6 @@ components/charts/        ReportsOverTime, HBarList, SparkBars, TrendChart, Rank
 
 ## Deployment
 
-`docker-compose.yml` → `postgres` (pgvector/pg16), `backend` (FastAPI, seeds on first start), `frontend` (Next.js standalone). For production: set a strong `SECRET_KEY`, `COOKIE_SECURE=true` behind HTTPS, `DEMO_MODE=false`, disable `AUTO_SEED`, and remove the demo accounts.
+Production runs on **Vercel** as one project with two services (Next.js frontend, FastAPI backend; root `vercel.json` routes `/api/*` to FastAPI) and **Neon PostgreSQL** with pgvector. Model artifacts are stored in PostgreSQL; Vercel functions perform no table creation, seeding, training or pattern mining. See [vercel-deployment.md](vercel-deployment.md).
+
+For local development, `docker-compose.yml` → `postgres` (pgvector/pg16), `backend` (FastAPI, seeds on first start), `frontend` (Next.js standalone). For any non-demo use: set a strong `SECRET_KEY`, `COOKIE_SECURE=true` behind HTTPS, `DEMO_MODE=false`, disable `AUTO_SEED`, and remove the demo accounts.

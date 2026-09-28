@@ -15,7 +15,6 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import Any
 
-from scipy import stats
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
@@ -54,6 +53,8 @@ def _gamma_prior(k: list[int], e: list[float]) -> tuple[float, float]:
 
 
 def rank(db: Session, dimension: str = "site", days: int | None = 90, today: date | None = None, limit: int | None = None) -> dict[str, Any]:
+    from scipy import stats  # deferred: importing it adds ~0.7 s to every serverless cold start
+
     today = today or date.today()
     col = {"site": Site.name, "activity": func.lower(Report.activity), "location": Report.location}[dimension]
     sif = func.sum(case((Report.sif_potential.is_(True), 1), else_=0))

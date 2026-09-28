@@ -61,7 +61,7 @@ def submit_decision(db: Session, report: Report, reviewer: User, action: str, *,
     if action == "NOTE" and not (note or "").strip():
         raise ReviewError("a note is required")
     if action in ("REJECT", "CHANGE") and not (reason or "").strip():
-        raise ReviewError("a reason is required when rejecting or changing the AI classification")
+        raise ReviewError("a reason is required when rejecting or changing the engine classification")
     if action == "CHANGE" and scl_class is None and sif_potential is None and primary_lsr is None:
         raise ReviewError("CHANGE requires a new SCL class, SIF potential or Life-Saving Rule")
 
@@ -92,6 +92,9 @@ def submit_decision(db: Session, report: Report, reviewer: User, action: str, *,
     elif action == "INSUFFICIENT":
         final_scl, final_sif = UNDETERMINED, None
         status = STATUS_CONFIRMED
+    changed = (original.get("scl_class"), original.get("sif_potential"), original.get("primary_lsr")) != (final_scl, final_sif, final_lsr)
+    if action != "NOTE" and changed:
+        status = STATUS_REJECTED  # engine output overturned by the reviewer: shown as "Expert corrected"
 
     decision_values = {"scl_class": final_scl, "sif_potential": final_sif, "sif_signal": derive_signal(final_scl, final_sif), "primary_lsr": final_lsr, "status": status}
     item = db.get(ReviewItem, review_id) if review_id else db.scalars(select(ReviewItem).where(ReviewItem.report_id == report.id, ReviewItem.status == "OPEN")).first()
@@ -114,7 +117,6 @@ def submit_decision(db: Session, report: Report, reviewer: User, action: str, *,
         item.status = "CLOSED"
         item.closed_at = datetime.now(timezone.utc)
 
-    changed = (original.get("scl_class"), original.get("sif_potential"), original.get("primary_lsr")) != (final_scl, final_sif, final_lsr)
     db.add(FeedbackExample(
         report_id=report.id, decision_id=decision.id, text=report.description,
         label_sif_potential=final_sif, label_scl_class=final_scl, label_lsr=final_lsr,

@@ -3,7 +3,6 @@ import {
   ArrowUpRight,
   CircleCheck,
   CircleHelp,
-  CircleX,
   ClipboardCheck,
   Construction,
   Container,
@@ -13,6 +12,7 @@ import {
   Lock,
   Minus,
   Mountain,
+  PencilLine,
   ShieldOff,
   Truck,
 } from "lucide-react";
@@ -44,7 +44,7 @@ export function SifBadge({ signal }: { signal: string | null | undefined }) {
 
 export function StatusBadge({ status }: { status: string | null | undefined }) {
   const m = STATUS_META[status || "PENDING"] ?? STATUS_META.PENDING;
-  const Icon = status === "HUMAN_CONFIRMED" ? CircleCheck : status === "HUMAN_REJECTED" ? CircleX : null;
+  const Icon = status === "HUMAN_CONFIRMED" ? CircleCheck : status === "HUMAN_REJECTED" ? PencilLine : null;
   return (
     <Badge tone={m.tone}>
       {Icon ? <Icon className="size-3" aria-hidden /> : null}

@@ -43,7 +43,7 @@ def test_report_detail_evidence(client, admin):
     a = d["analysis"]
     assert a["scl"]["scl_class"] == "EXPOSURE" and a["sif_potential"] is True
     assert a["mapping"]["primary"]["code"] == "ENERGY_ISOLATION"
-    assert a["mapping"]["label"] == "Proposed crosswalk"
+    assert a["mapping"]["label"] == "Proposed IOGP LSR crosswalk"
     text = d["report"]["description"]
     spans = [ev for e in a["entities"] for ev in e["evidence"] if ev["start"] is not None]
     assert spans and all(text[ev["start"] : ev["end"]] == ev["text"] for ev in spans)
@@ -82,7 +82,7 @@ def test_critical_end_to_end_flow(client, admin):
     # reviewer changes the classification
     d = client.post(f"/api/review/{item['id']}/decision", json={"action": "CHANGE", "scl_class": "EXPOSURE", "reason": "No pedestrian segregation at the gantry - no direct control.", "note": "Raise traffic management action."}, headers=admin)
     assert d.status_code == 200, d.text
-    assert d.json()["status"] == "HUMAN_CONFIRMED"
+    assert d.json()["status"] == "HUMAN_REJECTED"  # classification changed -> shown as "Expert corrected"
 
     detail = client.get(f"/api/reports/{rid}", headers=admin).json()
     assert detail["report"]["scl_class"] == "EXPOSURE" and detail["report"]["sif_signal"] == "SIF_POTENTIAL"
@@ -90,12 +90,14 @@ def test_critical_end_to_end_flow(client, admin):
     dec = detail["decisions"][0]
     assert dec["original_prediction"]["scl_class"] == "UNDETERMINED" and dec["decision"]["scl_class"] == "EXPOSURE"
     assert dec["reviewer"] == "HSE Admin (demo)" and dec["reason"] and dec["note"]
+    assert dec["feedback"] == {"stored": True, "is_correction": True}
     events = {e["event_type"] for e in detail["audit"]}
     assert {"REPORT_CREATED", "REPORT_ANALYZED", "SIF_CLASSIFIED", "RULE_MAPPED", "REVIEW_STARTED", "REVIEW_COMPLETED"} <= events
 
     after = client.get("/api/dashboard?days=30", headers=admin).json()
     assert after["kpis"]["review_queue"]["value"] == before["kpis"]["review_queue"]["value"]
     assert after["kpis"]["sif_potential_reports"]["value"] == mid["kpis"]["sif_potential_reports"]["value"] + 1
+    assert after["kpis"]["expert_reviewed"]["corrected"] == mid["kpis"]["expert_reviewed"]["corrected"] + 1
 
     fb = client.get("/api/model/status", headers=admin).json()["feedback"]
     assert fb["total"] >= 1 and fb["corrections"] >= 1
@@ -223,3 +225,11 @@ def test_officer_can_review(client):
     item = client.get("/api/review?page_size=1", headers=h).json()["items"][0]
     r = client.post(f"/api/review/{item['id']}/decision", json={"action": "INSUFFICIENT", "reason": "Reporter to be contacted"}, headers=h)
     assert r.status_code == 200
+
+
+def test_audit_can_exclude_sign_in_events(client, admin):
+    everything = client.get("/api/audit?page_size=100", headers=admin).json()
+    assert any(e["event_type"] == "USER_LOGIN" for e in everything["items"])
+    workflow = client.get("/api/audit?exclude=USER_LOGIN&page_size=100", headers=admin).json()
+    assert workflow["items"] and all(e["event_type"] != "USER_LOGIN" for e in workflow["items"])
+    assert workflow["total"] < everything["total"]

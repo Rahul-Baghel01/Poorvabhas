@@ -33,7 +33,7 @@ export function RankingTable({ data, compact }: { data: Ranking; compact?: boole
               <th scope="col" className="label-tech py-2 pr-2 font-normal">#</th>
               <th scope="col" className="label-tech py-2 pr-3 font-normal">{dimLabel}</th>
               <th scope="col" className="label-tech py-2 pr-3 text-right font-normal">Reports</th>
-              <th scope="col" className="label-tech py-2 pr-3 text-right font-normal">SIF potential</th>
+              <th scope="col" className="label-tech py-2 pr-3 text-right font-normal">SIF-potential</th>
               <th scope="col" className="label-tech py-2 pr-3 text-right font-normal">Raw rate</th>
               {density && !compact ? <th scope="col" className="label-tech py-2 pr-3 text-right font-normal">Raw / 100k h</th> : null}
               <th scope="col" className="label-tech py-2 pr-3 text-right font-normal">{density ? "Adj. / 100k h" : "Adj. rate"}</th>

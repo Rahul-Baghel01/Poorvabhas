@@ -216,6 +216,7 @@ def audit(
     db: Session = Depends(get_db),
     _: User = Depends(require_permission("audit")),
     event_type: str | None = None,
+    exclude: str | None = None,
     search: str | None = Query(None, max_length=100),
     page: int = Query(1, ge=1),
     page_size: int = Query(30, ge=1, le=100),
@@ -223,6 +224,8 @@ def audit(
     q = select(AuditLog)
     if event_type:
         q = q.where(AuditLog.event_type.in_(event_type.split(",")))
+    if exclude:
+        q = q.where(AuditLog.event_type.not_in(exclude.split(",")))
     if search:
         like = f"%{search}%"
         q = q.where((AuditLog.summary.ilike(like)) | (AuditLog.entity_id.ilike(like)) | (AuditLog.actor_name.ilike(like)))

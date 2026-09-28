@@ -222,7 +222,7 @@ export default function NewReportPage() {
                     {detail.review.reasons.map((r) => r.detail).join("; ")}
                   </Notice>
                 ) : (
-                  <Badge tone="cyan">AI analyzed — awaiting human validation</Badge>
+                  <Badge tone="cyan">Engine analyzed — awaiting HSE reviewer validation</Badge>
                 )}
                 <Link href={`/reports/${detail.report.report_id}`}>
                   <Button variant="primary" className="w-full">

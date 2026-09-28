@@ -1,6 +1,6 @@
 # Poorvabhas
 
-> **Sensing the fatality before it happens.**
+> **Detecting fatal potential before the outcome.**
 > *Judge the hazard, not the outcome.*
 
 **SIH 2026 · Problem Statement 26165 · Oil India Limited (OIL)**
@@ -144,7 +144,7 @@ A case enters the queue when:
 | Low confidence | Overall confidence < 0.55 |
 | Manual request | An officer sends the report to a reviewer |
 
-Reviewer actions: **Confirm, Reject, Change SCL class, Change SIF potential, Change LSR, Mark insufficient information, Add note.** Each decision stores the original prediction, the decision, reviewer identity, timestamp, reason and note, writes an audit record, and becomes a **feedback example**. Retraining is an explicit admin action (Model / Analysis → *Retrain classifier*); models are never retrained automatically after each correction.
+Reviewer actions: **Confirm** (engine result is correct), **Correct** (set the SCL class, SIF-potential or LSR, with a reason) and **Refine** (mark insufficient information, or add a note that keeps the review open). A decision that changes the engine's result is shown as **Expert corrected**; otherwise **Expert confirmed**. The API also accepts `REJECT` (flip SIF-potential). Each decision stores the original prediction, the decision, reviewer identity, timestamp, reason and note, writes an audit record, and becomes a **feedback example**. Retraining is an explicit admin action (Model / Analysis → *Retrain classifier*); models are never retrained automatically after each correction.
 
 ## Technology stack
 
@@ -156,7 +156,7 @@ Reviewer actions: **Confirm, Reject, Change SCL class, Change SIF potential, Cha
 | NLP / ML | spaCy (sentencizer), scikit-learn (TF-IDF, Logistic Regression, TruncatedSVD, HDBSCAN), SciPy, NumPy, pandas; optional HuggingFace Transformers |
 | Auth | bcrypt password hashes, JWT (HS256) in an httpOnly SameSite cookie |
 | Testing | pytest, Vitest + Testing Library, Playwright |
-| Deployment | Docker, Docker Compose |
+| Deployment | Vercel (Next.js + FastAPI services) with Neon PostgreSQL + pgvector in production; Docker Compose for local development |
 
 XGBoost was not needed: the classifier's job is a transparent second opinion and TF-IDF + LogReg exposes term weights directly.
 
@@ -192,7 +192,7 @@ python -m venv .venv
 .venv/Scripts/activate                   # Windows  (macOS/Linux: source .venv/bin/activate)
 pip install -r requirements-dev.txt
 uvicorn app.main:app --reload --port 8000
-# reseed from scratch:  python -m app.seed.seed --reset
+# reseed a LOCAL database from scratch:  python -m app.seed.seed --reset   (never against production)
 
 # 3. frontend
 cd frontend
@@ -226,14 +226,14 @@ These are demo-only accounts. Change or remove them before any non-demo use.
 
 ## Synthetic dataset
 
-`backend/app/seed/generator.py` generates **285 reports** (280 random + 5 fixed demo cases `SYN-DEMO-001…005`) across seven synthetic site profiles named after Assam locations (Digboi, Duliajan, Naharkatiya, Moran, Bokakhat, Hapjan, Tengakhat), 14 activities and four report types, spread over the last 12 months. The mix includes SIF-potential, non-SIF, borderline and deliberately vague reports, plus phrasings outside the engine's vocabulary.
+`backend/app/seed/generator.py` generates `SEED_REPORTS` random reports plus 5 fixed demo cases `SYN-DEMO-001…005` (285 with the local default of 280; the production demo uses `SEED_REPORTS=275` for **280 reports**) across seven synthetic site profiles named after Assam locations (Digboi, Duliajan, Naharkatiya, Moran, Bokakhat, Hapjan, Tengakhat), 14 activities and four report types, spread over the last 12 months. The mix includes SIF-potential, non-SIF, borderline and deliberately vague reports, plus phrasings outside the engine's vocabulary.
 
 Each scenario carries a **reference label assigned by scenario design**, not by the engine. The labels drive an honest held-out evaluation (25% hash split). A rising hot-work / gas-testing pattern at Duliajan is planted so the trend detector has a real signal to find. All names, contractors ("Contractor-A (synthetic)") and exposure hours are fictional.
 
 ## Testing
 
 ```bash
-cd backend  && pytest                          # 65 tests: extraction, SCL, mapping, scoring, patterns, ranking, API, E2E flow
+cd backend  && pytest                          # 86 tests: extraction, SCL, mapping, scoring, patterns, ranking, API, E2E flow, deployment
 cd frontend && npm test                        # Vitest: formatting, evidence highlighting, badges, decision form
 cd frontend && npx playwright install chromium && npm run test:e2e   # needs backend + frontend running
 ```

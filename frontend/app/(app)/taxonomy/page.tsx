@@ -169,7 +169,7 @@ export default function TaxonomyPage() {
     <RequirePermission perm="taxonomy">
       <PageHeader eyebrow="Administration / IOGP Life-Saving Rules" title="Taxonomy" subtitle="Keywords, phrases and weights used by the deterministic rule mapper. The nine IOGP Life-Saving Rules plus a process-safety / no-applicable-rule bucket." />
       <Notice tone="amber" title="Taxonomy changes affect the deterministic analysis engine." className="mb-5">
-        Changes apply to new analyses immediately and are recorded in the audit log. Use Model / Analysis → “Re-analyse all” to apply them to existing reports. The rule mapping is a proposed crosswalk and requires independent HSE expert validation.
+        Changes apply to new analyses immediately and are recorded in the audit log. Use Model / Analysis → “Re-analyse all” to apply them to existing reports. The rule mapping is a <strong>proposed IOGP LSR crosswalk</strong> requiring independent HSE expert validation; it is not an official IOGP or OIL mapping and does not decide the SIF classification.
       </Notice>
       {q.isError ? (
         <ErrorState error={q.error} onRetry={() => q.refetch()} />

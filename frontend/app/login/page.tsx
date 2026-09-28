@@ -96,12 +96,12 @@ export default function LoginPage() {
         <div className="max-w-xl">
           <p className="label-tech !text-red">SIH 2026 · PS 26165 · Oil India Limited</p>
           <h1 className="mt-4 text-[44px] font-semibold leading-[1.05] tracking-[-0.02em]">
-            Sensing the fatality
+            Detecting fatal potential
             <br />
-            before it happens.
+            before the outcome.
           </h1>
           <p className="mt-5 max-w-lg text-[15px] leading-relaxed text-fg-2">
-            AI/NLP decision support that reads unsafe-act, unsafe-condition and near-miss reports, reasons about the hazard with the SCL model, and shows HSE teams where fatal potential is concentrated.
+            Local NLP decision support that reads unsafe-act, unsafe-condition and near-miss reports, reasons about the hazard with the SCL model, and shows HSE teams where fatal potential is concentrated.
           </p>
           <ol className="mt-8 flex flex-wrap items-center gap-x-2 gap-y-2 font-mono text-[11px] uppercase tracking-[0.1em] text-fg-2" aria-label="Analysis flow">
             {FLOW.map((f, i) => (
@@ -123,7 +123,7 @@ export default function LoginPage() {
         <div className="w-full max-w-sm">
           <div className="mb-8 lg:hidden">
             <p className="text-[17px] font-semibold tracking-[0.2em]">POORVABHAS</p>
-            <p className="mt-1 text-[13px] text-fg-2">Sensing the fatality before it happens.</p>
+            <p className="mt-1 text-[13px] text-fg-2">Detecting fatal potential before the outcome.</p>
           </div>
           <div className="mb-6 flex items-center gap-2">
             <ShieldCheck className="size-5 text-cyan" aria-hidden />

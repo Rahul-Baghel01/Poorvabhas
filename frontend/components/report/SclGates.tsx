@@ -45,12 +45,58 @@ function GateCard({ gate, index }: { gate: Gate; index: number }) {
   );
 }
 
+const ANSWER_TEXT: Record<string, string> = { YES: "Yes", NO: "No", INSUFFICIENT: "Not stated" };
+
+/** The two SCL checks that decide SIF-potential, and the engine's outcome with its reason. */
+function EnergyControlTest({ analysis }: { analysis: Analysis }) {
+  const scl = analysis.scl;
+  const energy = scl.gates.find((g) => g.key === "high_energy");
+  const control = scl.gates.find((g) => g.key === "direct_control");
+  const e = energy?.answer ?? "INSUFFICIENT";
+  const c = control?.answer ?? "INSUFFICIENT";
+  const reason =
+    scl.sif_signal === "SIF_EVENT"
+      ? "High energy was released and a serious injury or fatality occurred: an actual SIF Event (HSIF), routed to incident investigation."
+      : scl.sif_potential === true
+        ? "High energy was present and no direct control was in place: SIF-potential regardless of the injury outcome."
+        : scl.sif_potential === false
+          ? e === "NO"
+            ? "No high-energy source is stated, so the report is not SIF-potential."
+            : "High energy was present but a direct control was in place, so the report is not SIF-potential."
+          : "The report does not contain enough evidence to answer both checks. Nothing is assumed; the case goes to an HSE reviewer.";
+  return (
+    <div className="grid gap-3 rounded-sm border border-border-strong bg-surface-2 p-3.5 md:grid-cols-[1fr_1fr_1.4fr]" aria-label="Energy and control test">
+      <div>
+        <p className="label-tech">1 · High energy present?</p>
+        <p className="mt-1.5 flex items-center gap-2 text-[14px] font-semibold text-fg">
+          <AnswerBadge answer={e} /> <span className="sr-only">{ANSWER_TEXT[e]}</span>
+        </p>
+      </div>
+      <div>
+        <p className="label-tech">2 · Direct control in place?</p>
+        <p className="mt-1.5 flex items-center gap-2 text-[14px] font-semibold text-fg">
+          <ControlAnswerBadge answer={c} /> <span className="sr-only">{ANSWER_TEXT[c]}</span>
+        </p>
+      </div>
+      <div>
+        <p className="label-tech">Result</p>
+        <p className="mt-1.5">
+          <SifBadge signal={scl.sif_signal} />
+        </p>
+        <p className="mt-1.5 text-[12px] leading-snug text-fg-2">{reason}</p>
+      </div>
+      <p className="text-[11px] text-muted md:col-span-3">SIF-potential is decided by energy and direct control, not by the reported injury severity. Injury outcome only separates an actual SIF Event (HSIF) from PSIF, and LSIF from Low Severity.</p>
+    </div>
+  );
+}
+
 export function SclGates({ analysis }: { analysis: Analysis }) {
   const scl = analysis.scl;
   const gates = GATE_ORDER.map((k) => scl.gates.find((g) => g.key === k)).filter(Boolean) as Gate[];
   const clsMeta = SCL_META[scl.scl_class];
   return (
     <div className="flex flex-col gap-4">
+      <EnergyControlTest analysis={analysis} />
       <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-4">
         {gates.map((g, i) => (
           <GateCard key={g.key} gate={g} index={i} />
@@ -87,13 +133,13 @@ export function SclGates({ analysis }: { analysis: Analysis }) {
           ) : null}
         </div>
         <div className={cn("rounded-sm border p-4", scl.sif_signal === "SIF_POTENTIAL" || scl.sif_signal === "SIF_EVENT" ? "border-red/50 bg-red/[0.07]" : scl.sif_signal === "UNDETERMINED" ? "border-amber/40 bg-amber/[0.06]" : "border-border bg-surface-2")}>
-          <p className="label-tech">SIF potential</p>
+          <p className="label-tech">SIF-potential</p>
           <p className={cn("mt-1.5 font-mono text-[26px] font-semibold tracking-tight", scl.sif_potential === true ? "text-red" : scl.sif_potential === false ? "text-fg" : "text-amber")}>
             {scl.sif_potential === true ? "YES" : scl.sif_potential === false ? "NO" : "UNDETERMINED"}
           </p>
           <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[12.5px] text-fg-2">
             <SifBadge signal={scl.sif_signal} />
-            <span>Prototype definition: PSIF + Exposure</span>
+            <span>SIF-potential = SCL class PSIF or Exposure</span>
           </div>
           {scl.sif_signal === "SIF_EVENT" ? <p className="mt-1.5 text-[12px] text-fg-2">Actual serious outcome (HSIF): route to incident investigation.</p> : null}
         </div>

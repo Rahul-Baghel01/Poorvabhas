@@ -27,7 +27,9 @@ function PatternCard({ p }: { p: PatternOut }) {
       <div className="flex items-end justify-between gap-3">
         <div>
           <p className="num font-mono text-[26px] font-semibold leading-none text-fg">{p.occurrences}</p>
-          <p className="mt-1 text-[11.5px] text-muted">occurrences · {p.sif_occurrences} SIF signal</p>
+          <p className="mt-1 text-[11.5px] text-muted" title="Reports classified SIF-potential (PSIF / Exposure); includes any SIF Event (HSIF)">
+            occurrences · {p.sif_occurrences} SIF-potential
+          </p>
         </div>
         <SparkBars counts={td.counts} label={`${p.code}: occurrences per ${td.bucket}`} height={32} />
       </div>
@@ -54,7 +56,7 @@ export default function PatternsPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Intelligence / recurring precursors"
+        eyebrow="Intelligence / recurring precursors · synthetic / proxy data"
         title="Pattern explorer"
         subtitle="Connecting recurring precursor signals across activity, location and failed barriers."
         actions={

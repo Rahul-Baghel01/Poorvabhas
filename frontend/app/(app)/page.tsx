@@ -1,11 +1,12 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ArrowRight, ClipboardCheck, FileText, Layers, Network, Plus, ShieldAlert, Siren } from "lucide-react";
+import { AlertTriangle, ArrowRight, ClipboardCheck, FileText, Network, Plus, ShieldAlert, Siren, UserCheck } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import * as React from "react";
 
-import { HBarList, ReportsOverTime, SparkBars } from "@/components/charts/charts";
+import { HBarList, SparkBars } from "@/components/charts/charts";
 import { RankingTable } from "@/components/charts/RankingTable";
 import { LsrTag, SifBadge, TrendBadge } from "@/components/ui/badges";
 import { FadeIn } from "@/components/ui/motion";
@@ -14,12 +15,21 @@ import { api, qs } from "@/lib/api";
 import { REVIEW_CATEGORY_META, SIF_SIGNAL_META, cn, pct } from "@/lib/format";
 import type { Dashboard, Ranking } from "@/lib/types";
 
+const ReportsOverTime = dynamic(() => import("@/components/charts/timeseries").then((m) => m.ReportsOverTime), { ssr: false, loading: () => <LoadingState rows={5} /> });
+
 const WINDOWS = [
   { days: 30, label: "Last 30 days" },
   { days: 90, label: "Last 90 days" },
   { days: 180, label: "Last 180 days" },
   { days: 365, label: "Last 365 days" },
 ];
+
+/** Reports-list filter for the dashboard window (the window is start-exclusive, end-inclusive). */
+function windowQs(w: { start: string; end: string }): string {
+  const from = new Date(w.start + "T00:00:00Z");
+  from.setUTCDate(from.getUTCDate() + 1);
+  return `date_from=${from.toISOString().slice(0, 10)}&date_to=${w.end}`;
+}
 
 function Delta({ pctv, invert }: { pctv: number | null | undefined; invert?: boolean }) {
   if (pctv === null || pctv === undefined) return <span className="text-muted">no prior period data</span>;
@@ -59,11 +69,13 @@ export default function CommandCenter() {
   const q = useQuery({ queryKey: ["dashboard", days], queryFn: () => api<Dashboard>(`/dashboard${qs({ days })}`) });
   const ranking = useQuery({ queryKey: ["ranking", dim, days], queryFn: () => api<Ranking>(`/ranking${qs({ dimension: dim, days })}`), enabled: dim !== "site" });
   const d = q.data;
+  const period = `last ${days} days`;
+  const inWindow = d ? windowQs(d.window) : "";
 
   return (
     <div>
       <PageHeader
-        eyebrow={`HSE intelligence / ${WINDOWS.find((w) => w.days === days)?.label ?? `last ${days} days`}`}
+        eyebrow={`HSE intelligence / ${WINDOWS.find((w) => w.days === days)?.label ?? `last ${days} days`} · synthetic / proxy data`}
         title="Command center"
         subtitle="A clear view of the safety signals that need human attention."
         actions={
@@ -98,9 +110,9 @@ export default function CommandCenter() {
                 ? Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-[124px]" />)
                 : (
                   <>
-                    <Kpi label="Total reports" value={d.kpis.total_reports.value} icon={FileText} sub={<Delta pctv={d.kpis.total_reports.change_pct} invert />} href="/reports" />
+                    <Kpi label={`Reports · ${period}`} value={d.kpis.total_reports.value} icon={FileText} sub={<Delta pctv={d.kpis.total_reports.change_pct} invert />} href={`/reports?${inWindow}`} />
                     <Kpi
-                      label="SIF-potential reports"
+                      label={`SIF-potential cases · ${period}`}
                       value={d.kpis.sif_potential_reports.value}
                       icon={ShieldAlert}
                       tone="red"
@@ -109,17 +121,18 @@ export default function CommandCenter() {
                           {pct(d.kpis.sif_potential_reports.share)} of reports{d.kpis.sif_potential_reports.sif_events ? ` · +${d.kpis.sif_potential_reports.sif_events} SIF event${d.kpis.sif_potential_reports.sif_events > 1 ? "s" : ""}` : ""}
                         </>
                       }
-                      href="/reports?sif_signal=SIF_POTENTIAL"
+                      href={`/reports?sif_signal=SIF_POTENTIAL&${inWindow}`}
                     />
-                    <Kpi label="Recurring patterns" value={d.kpis.recurring_patterns.value} icon={Network} tone="cyan" sub={d.kpis.recurring_patterns.increasing ? `${d.kpis.recurring_patterns.increasing} with a detected increase` : "No statistically detected increase"} href="/patterns" />
-                    <Kpi label="Review queue" value={d.kpis.review_queue.value} icon={ClipboardCheck} tone="amber" sub="Open items awaiting an HSE reviewer" href="/review" />
-                    <Kpi label="High-priority signals" value={d.kpis.high_priority_signals.value} icon={Siren} tone="red" sub={<Delta pctv={d.kpis.high_priority_signals.change_pct} />} href="/reports?priority=CRITICAL,HIGH&sif_signal=SIF_POTENTIAL,SIF_EVENT" />
+                    <Kpi label="Awaiting HSE review" value={d.kpis.review_queue.value} icon={ClipboardCheck} tone="amber" sub="Open review items · all dates" href="/review" />
+                    <Kpi label="Recurring precursor patterns" value={d.kpis.recurring_patterns.value} icon={Network} tone="cyan" sub={`All data · ${d.kpis.recurring_patterns.increasing ? `${d.kpis.recurring_patterns.increasing} with a detected increase` : "no statistically detected increase"}`} href="/patterns" />
+                    <Kpi label={`High-priority SIF cases · ${period}`} value={d.kpis.high_priority_signals.value} icon={Siren} tone="red" sub={<Delta pctv={d.kpis.high_priority_signals.change_pct} />} href={`/reports?priority=CRITICAL,HIGH&sif_signal=SIF_POTENTIAL,SIF_EVENT&${inWindow}`} />
                     <Kpi
-                      label="LSR coverage"
-                      value={d.kpis.lsr_coverage.value === null ? "—" : pct(d.kpis.lsr_coverage.value)}
-                      icon={Layers}
+                      label={`Expert-reviewed cases · ${period}`}
+                      value={d.kpis.expert_reviewed.value}
+                      icon={UserCheck}
                       tone="green"
-                      sub={`${d.kpis.lsr_coverage.mapped}/${d.kpis.lsr_coverage.sif_signals} SIF signals mapped · ${d.kpis.lsr_coverage.rules_observed}/9 rules seen`}
+                      sub={`${d.kpis.expert_reviewed.confirmed} confirmed · ${d.kpis.expert_reviewed.corrected} corrected`}
+                      href={`/reports?status=HUMAN_CONFIRMED,HUMAN_REJECTED&${inWindow}`}
                     />
                   </>
                 )}
@@ -140,7 +153,7 @@ export default function CommandCenter() {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Link href="/reports?priority=CRITICAL,HIGH&sif_signal=SIF_POTENTIAL,SIF_EVENT&sort=priority_desc">
+                  <Link href={`/reports?priority=CRITICAL,HIGH&sif_signal=SIF_POTENTIAL,SIF_EVENT&sort=priority_desc&${inWindow}`}>
                     <Button variant="danger" size="sm">
                       View signals <ArrowRight className="size-3.5" aria-hidden />
                     </Button>
@@ -155,7 +168,7 @@ export default function CommandCenter() {
 
           {/* Row: distribution + time */}
           <div className="grid gap-5 xl:grid-cols-3">
-            <Panel title="SIF potential distribution" subtitle="Current decision per report (AI or reviewer)" id="dist">
+            <Panel title="SIF classification" subtitle={`Current decision per report (engine or HSE reviewer) · ${period}`} id="dist">
               {!d ? (
                 <LoadingState />
               ) : (
@@ -185,30 +198,37 @@ export default function CommandCenter() {
                   ))}
                 </div>
               ) : null}
+              <p className="mt-3 text-[11.5px] leading-snug text-muted">
+                <span className="text-fg-2">SIF Event</span> = report classified as an actual serious/fatal outcome (HSIF); report type &lsquo;Incident&rsquo; alone does not imply SIF Event. <span className="text-fg-2">SIF-potential</span> = PSIF or Exposure: high energy without a direct control, whatever the outcome.
+              </p>
             </Panel>
-            <Panel title="Reports over time" subtitle="Weekly count of reports and SIF signals" className="xl:col-span-2" id="time">
+            <Panel title="Reports over time" subtitle="Weekly reports and SIF-potential + SIF Event reports" className="xl:col-span-2" id="time">
               {!d ? <LoadingState rows={5} /> : <ReportsOverTime data={d.reports_over_time} />}
             </Panel>
           </div>
 
           {/* Row: LSR + activities */}
           <div className="grid gap-5 lg:grid-cols-2">
-            <Panel title="Life-Saving Rules" subtitle="SIF-signal reports by proposed rule (proposed crosswalk — requires HSE expert validation)" id="lsr">
+            <Panel
+              title="Life-Saving Rules"
+              subtitle={`SIF-potential + SIF Event reports by proposed IOGP LSR crosswalk · subject to HSE expert validation${d?.kpis.lsr_coverage.sif_signals ? ` · ${d.kpis.lsr_coverage.mapped}/${d.kpis.lsr_coverage.sif_signals} mapped to a rule, ${d.kpis.lsr_coverage.rules_observed}/9 rules seen` : ""}`}
+              id="lsr"
+            >
               {!d ? (
                 <LoadingState rows={5} />
               ) : (
                 <HBarList
-                  valueLabel="SIF-signal reports"
+                  valueLabel="SIF-potential + SIF Event reports"
                   rows={d.top_lsr.map((r) => ({ key: r.code, label: <LsrTag code={r.code} name={r.name} />, value: r.count }))}
-                  emptyText="No SIF signals in this window"
+                  emptyText="No SIF-potential or SIF Event reports in this window"
                 />
               )}
             </Panel>
-            <Panel title="Top activities" subtitle="Reports per activity and how many carry a SIF signal" id="acts">
+            <Panel title="Top activities" subtitle="Reports per activity and how many are SIF-potential or SIF Event" id="acts">
               {!d ? (
                 <LoadingState rows={5} />
               ) : (
-                <HBarList valueLabel="Reports" partLabel="SIF signal" rows={d.top_activities.map((a) => ({ key: a.activity, label: a.activity, value: a.total, part: a.sif }))} />
+                <HBarList valueLabel="Reports" partLabel="SIF-potential / SIF Event" rows={d.top_activities.map((a) => ({ key: a.activity, label: a.activity, value: a.total, part: a.sif }))} />
               )}
             </Panel>
           </div>
@@ -240,7 +260,7 @@ export default function CommandCenter() {
                 <RankingTable data={{ ...ranking.data, items: ranking.data.items.slice(0, 8) }} compact />
               )}
             </Panel>
-            <Panel title="Pattern alerts" subtitle="Recurring precursor combinations mined from the data" className="xl:col-span-2" id="patterns" actions={<Link href="/patterns" className="text-[12px] text-cyan hover:underline">All patterns</Link>}>
+            <Panel title="Pattern alerts" subtitle="Recurring precursor patterns by site and activity · open one for its reports" className="xl:col-span-2" id="patterns" actions={<Link href="/patterns" className="text-[12px] text-cyan hover:underline">All patterns</Link>}>
               {!d ? (
                 <LoadingState rows={5} />
               ) : d.patterns.length === 0 ? (
@@ -255,6 +275,7 @@ export default function CommandCenter() {
                           <span className="block truncate text-[13px] text-fg">{p.name}</span>
                           <span className="mt-0.5 flex items-center gap-2 text-[11.5px] text-muted">
                             <span className="num font-mono text-fg-2">{p.occurrences}×</span> · {p.sites.slice(0, 2).join(", ")}
+                            {p.activities?.length ? <> · <span className="capitalize">{p.activities[0]}</span></> : null}
                           </span>
                         </span>
                         <span className="hidden sm:block">
@@ -280,7 +301,7 @@ export default function CommandCenter() {
                 <table className="w-full min-w-[720px] text-[12.5px]">
                   <thead>
                     <tr className="border-b border-border text-left">
-                      {["Report", "Reason for review", "Activity", "Site", "SIF signal", "Priority"].map((h) => (
+                      {["Report", "Reason for review", "Activity", "Site", "SIF classification", "Priority"].map((h) => (
                         <th key={h} scope="col" className="label-tech py-2 pr-3 font-normal">
                           {h}
                         </th>

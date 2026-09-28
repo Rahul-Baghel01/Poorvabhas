@@ -96,7 +96,7 @@ function Registry() {
   return (
     <div>
       <PageHeader
-        eyebrow="Registry / all sources"
+        eyebrow="Registry / all sources · synthetic / proxy data"
         title="Safety reports"
         subtitle="Every unsafe-act, unsafe-condition, near-miss and incident report with its SIF reasoning and review status."
         actions={
@@ -137,7 +137,7 @@ function Registry() {
           <div id="filters" className="grid grid-cols-2 gap-3 border-t border-border pt-3 md:grid-cols-4 xl:grid-cols-8">
             {sel("report_type", "Report type", (f?.report_types ?? []).map((v) => ({ value: v, label: v })))}
             {sel("site", "Site", (f?.sites ?? []).map((s) => ({ value: s.name, label: s.name })))}
-            {sel("sif_signal", "SIF status", (f?.sif_signals ?? []).map((v) => ({ value: v, label: SIF_SIGNAL_META[v]?.label ?? v })))}
+            {sel("sif_signal", "SIF signal", (f?.sif_signals ?? []).map((v) => ({ value: v, label: SIF_SIGNAL_META[v]?.label ?? v })))}
             {sel("priority", "Priority", (f?.priority_levels ?? []).map((v) => ({ value: v, label: PRIORITY_META[v]?.label ?? v })))}
             {sel("scl_class", "SCL class", (f?.scl_classes ?? []).map((v) => ({ value: v, label: SCL_META[v]?.label ?? v })))}
             {sel("lsr", "IOGP rule", Object.entries(LSR_SHORT).map(([k, v]) => ({ value: k, label: v })))}
@@ -205,7 +205,7 @@ function Registry() {
               <table className="w-full min-w-[1080px] text-[12.5px]">
                 <thead>
                   <tr className="border-b border-border text-left">
-                    {["Report", "Type / date", "Activity", "Site / location", "SIF signal", "LSR", "Priority", "Confidence", "Status"].map((h) => (
+                    {["Report", "Type / date", "Activity", "Site / location", "SIF signal / SCL class", "LSR", "Priority", "Confidence", "Status"].map((h) => (
                       <th key={h} scope="col" className="label-tech px-4 py-2.5 font-normal first:pl-4">
                         {h}
                       </th>
@@ -234,7 +234,8 @@ function Registry() {
                       </td>
                       <td className="px-4 py-3 align-top">
                         <SifBadge signal={r.sif_signal} />
-                        <p className="mt-1">
+                        <p className="mt-1" title="SCL class (Safety Classification and Learning)">
+                          <span className="mr-1 font-mono text-[9.5px] uppercase tracking-wider text-muted">SCL</span>
                           <SclBadge scl={r.scl_class} />
                         </p>
                       </td>

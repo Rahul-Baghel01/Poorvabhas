@@ -84,20 +84,20 @@ function ReviewCard({ item, onDone }: { item: ReviewItem; onDone: (msg: string) 
         <div className="flex min-w-0 flex-col gap-3">
           <dl className="grid grid-cols-2 gap-3 rounded-sm border border-border bg-surface-2 p-3 sm:grid-cols-4 lg:grid-cols-2 2xl:grid-cols-4">
             <div>
-              <dt className="label-tech">Current class</dt>
+              <dt className="label-tech">SCL class</dt>
               <dd className="mt-1">
                 <SclBadge scl={r.scl_class} />
                 {a && a.scl_class === "UNDETERMINED" && a.scl_candidates.length ? <span className="block text-[11px] text-muted">{a.scl_candidates.map((c) => SCL_META[c]?.label ?? c).join(" / ")}</span> : null}
               </dd>
             </div>
             <div>
-              <dt className="label-tech">SIF signal</dt>
+              <dt className="label-tech">SIF classification</dt>
               <dd className="mt-1">
                 <SifBadge signal={r.sif_signal} />
               </dd>
             </div>
             <div>
-              <dt className="label-tech">Confidence</dt>
+              <dt className="label-tech">Evidence confidence</dt>
               <dd className="mt-1">
                 <ConfidenceTag value={a?.confidence ?? r.confidence} />
               </dd>
@@ -107,7 +107,7 @@ function ReviewCard({ item, onDone }: { item: ReviewItem; onDone: (msg: string) 
               <dd className="num mt-1 font-mono text-[12px] text-fg-2">{a?.ml_probability !== null && a?.ml_probability !== undefined ? `P=${a.ml_probability.toFixed(2)}` : "n/a"}</dd>
             </div>
             <div className="col-span-2 sm:col-span-4 lg:col-span-2 2xl:col-span-4">
-              <dt className="label-tech">Suggested LSR (proposed crosswalk)</dt>
+              <dt className="label-tech">Suggested LSR — proposed crosswalk · subject to HSE expert validation</dt>
               <dd className="mt-1">
                 <LsrTag code={a?.suggested_lsr?.code ?? r.primary_lsr} name={a?.suggested_lsr?.name ?? r.lsr_name} />
               </dd>
@@ -141,8 +141,8 @@ export default function ReviewQueuePage() {
     <div>
       <PageHeader
         eyebrow="Human-in-the-loop / reviewer workspace"
-        title="Review queue"
-        subtitle="Cases the engine will not decide alone: low confidence, borderline gates, missing facts, conflicting rules, or classifier disagreement. Your decision is final and becomes a feedback example."
+        title="HSE review queue"
+        subtitle="Cases the engine will not decide alone: low confidence, borderline gates, missing facts, conflicting rules, or classifier disagreement. Reviewer decisions are authoritative and may be stored as labelled feedback examples for controlled retraining."
       />
 
       <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-7" role="tablist" aria-label="Review categories">

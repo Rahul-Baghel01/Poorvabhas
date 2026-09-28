@@ -2,23 +2,24 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ClipboardCheck, FileX, History, Network, RefreshCw, Send, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ClipboardCheck, FileX, History, Network, RefreshCw, Send, X } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import * as React from "react";
 
-import { LsrTag, PriorityBadge, SifBadge, StatusBadge } from "@/components/ui/badges";
+import { LsrTag, PriorityBadge, SclBadge, SifBadge, StatusBadge } from "@/components/ui/badges";
 import { FadeIn } from "@/components/ui/motion";
 import { Badge, Button, EmptyState, ErrorState, KV, LoadingState, Notice, Panel, Textarea } from "@/components/ui/primitives";
-import { ConfidenceBreakdown, MappingPanel, PipelineTrace, PriorityBreakdown } from "@/components/report/Breakdowns";
+import { ConfidenceBreakdown, EvidenceCoverage, MappingPanel, PipelineTrace, PriorityBreakdown } from "@/components/report/Breakdowns";
 import { DecisionForm, type DecisionPayload } from "@/components/report/DecisionForm";
 import { EvidenceLegend, EvidenceText } from "@/components/report/EvidenceText";
 import { ExtractionTable } from "@/components/report/ExtractionTable";
 import { SclGates } from "@/components/report/SclGates";
+import { WhyTrail } from "@/components/report/WhyTrail";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useInvalidateAll } from "@/lib/hooks";
-import { SCL_META, fmtDate, fmtDateTime } from "@/lib/format";
+import { EVENT_LABELS, SCL_META, fmtDate, fmtDateTime } from "@/lib/format";
 import type { ReportDetail, ReportRow } from "@/lib/types";
 
 function SendToReview({ reportId, onDone }: { reportId: string; onDone: () => void }) {
@@ -76,6 +77,37 @@ function SendToReview({ reportId, onDone }: { reportId: string; onDone: () => vo
   );
 }
 
+/** What happened after the HSE reviewer decided, as recorded by the backend (no instant retraining). */
+function FeedbackLoop({ status, decision }: { status: string; decision?: ReportDetail["decisions"][number] }) {
+  const corrected = status === "HUMAN_REJECTED";
+  const steps = [
+    { label: corrected ? "Expert corrected" : "Expert confirmed", detail: decision ? `${decision.action.toLowerCase()} · ${decision.reviewer} · ${fmtDateTime(decision.created_at)}` : "HSE reviewer decision" },
+    { label: decision?.feedback?.stored ? (decision.feedback.is_correction ? "Correction stored as feedback" : "Confirmation stored as feedback") : "Feedback not recorded", detail: decision?.feedback?.stored ? "Labelled feedback example saved with the original engine output" : "No feedback example is linked to this decision" },
+    { label: "Controlled retraining / refinement", detail: "Explicit admin action in Model / Analysis — not automatic" },
+  ];
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="flex items-center gap-2 text-[13px] text-green">
+        <ClipboardCheck className="size-4" aria-hidden /> {corrected ? "Expert corrected" : "Expert confirmed"} by an HSE reviewer.
+      </p>
+      <ol className="mt-2 flex flex-col" aria-label="Feedback loop">
+        {steps.map((s, i) => (
+          <li key={s.label}>
+            <div className={i === 2 ? "rounded-sm border border-dashed border-border px-2.5 py-1.5" : "rounded-sm border border-green/30 bg-green/[0.05] px-2.5 py-1.5"}>
+              <p className="text-[12.5px] text-fg">{s.label}</p>
+              <p className="text-[11px] text-muted">{s.detail}</p>
+            </div>
+            {i < steps.length - 1 ? <ArrowDown className="mx-auto my-0.5 size-3.5 text-muted" aria-hidden /> : null}
+          </li>
+        ))}
+      </ol>
+      <Link href="/model" className="mt-1 text-[12px] text-cyan hover:underline">
+        Feedback and retraining status →
+      </Link>
+    </div>
+  );
+}
+
 export default function ReportDetailPage() {
   const { id } = useParams<{ id: string }>();
   const reportId = decodeURIComponent(id);
@@ -122,14 +154,18 @@ export default function ReportDetailPage() {
         <div className="flex flex-col gap-4 border-b border-border pb-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="label-tech">
-              {r.report_type} · {fmtDate(r.date)} · {r.is_synthetic ? "synthetic demo record" : r.data_source.replace("_", " ")}
+              {r.report_type} · {fmtDate(r.date)} · {r.is_synthetic ? "Synthetic / proxy data" : r.data_source.replace("_", " ")}
             </p>
             <h1 className="mt-1.5 font-mono text-[28px] font-semibold tracking-tight md:text-[32px]">{r.report_id}</h1>
             <div className="mt-2.5 flex flex-wrap items-center gap-2">
               <SifBadge signal={r.sif_signal} />
+              <span className="inline-flex items-center gap-1 rounded-xs border border-border px-1.5 py-0.5" title="SCL class">
+                <span className="font-mono text-[9.5px] uppercase tracking-wider text-muted">SCL</span>
+                <SclBadge scl={r.scl_class} />
+              </span>
               <StatusBadge status={r.status} />
               <PriorityBadge level={r.priority_level} score={r.priority_score} />
-              {human ? <Badge tone="green">Final decision: HSE reviewer</Badge> : <Badge tone="cyan">Final decision: pending human validation</Badge>}
+              {human ? <Badge tone="green">Final decision: HSE reviewer</Badge> : <Badge tone="cyan">Final decision: pending HSE reviewer validation</Badge>}
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -154,8 +190,8 @@ export default function ReportDetailPage() {
       </FadeIn>
 
       {human && a && (a.sif_signal !== r.sif_signal || a.scl.scl_class !== r.scl_class || a.mapping.primary.code !== r.primary_lsr) ? (
-        <Notice tone="green" title="Reviewer decision overrides the AI analysis">
-          Current decision: {SCL_META[r.scl_class ?? ""]?.label ?? r.scl_class} · {r.sif_signal?.replace("_", " ").toLowerCase()} · {r.lsr_name}. The AI output below is preserved for traceability.
+        <Notice tone="green" title="HSE reviewer decision overrides the engine analysis">
+          Current decision: {SCL_META[r.scl_class ?? ""]?.label ?? r.scl_class} · {r.sif_signal?.replace("_", " ").toLowerCase()} · {r.lsr_name}. The engine output below is preserved for traceability.
         </Notice>
       ) : null}
 
@@ -178,12 +214,16 @@ export default function ReportDetailPage() {
               <ExtractionTable entities={a.entities} notStated={a.not_stated} onFocus={setFocus} focus={focus} />
             </Panel>
 
-            <Panel title="SCL decision" subtitle="Judge the hazard, not the outcome — four evidence gates resolve the Safety Classification and Learning class" id="scl" accent="red">
+            <Panel title="SCL classification · energy + direct control" subtitle="Judge the hazard, not the outcome — evidence gates resolve the Safety Classification and Learning class" id="scl" accent="red">
               <SclGates analysis={a} />
             </Panel>
 
-            <Panel title="IOGP Life-Saving Rule mapping" subtitle="Proposed crosswalk" id="iogp" accent="cyan">
+            <Panel title="Proposed SCL → IOGP crosswalk" subtitle="Suggested IOGP Life-Saving Rule (LSR) · subject to HSE expert validation · separate from the SIF classification" id="iogp" accent="cyan">
               <MappingPanel analysis={a} />
+            </Panel>
+
+            <Panel title="Why trail" subtitle="Priority → evidence dimension → triggered check → finding → supporting report text" id="why" accent="cyan">
+              <WhyTrail analysis={a} report={r} patterns={q.data.patterns} />
             </Panel>
 
             <Panel
@@ -206,6 +246,7 @@ export default function ReportDetailPage() {
               {q.data.review ? (
                 <div className="flex flex-col gap-3">
                   <div>
+                    <p className="label-tech mb-1.5 !text-amber">Pending HSE review</p>
                     <Badge tone="amber">{q.data.review.category_label}</Badge>
                     <ul className="mt-2 flex flex-col gap-1.5">
                       {q.data.review.reasons.map((x, i) => (
@@ -223,20 +264,22 @@ export default function ReportDetailPage() {
                   ) : null}
                 </div>
               ) : human ? (
-                <p className="flex items-center gap-2 text-[13px] text-green">
-                  <ClipboardCheck className="size-4" aria-hidden /> Validated by an HSE reviewer ({q.data.decisions[0]?.reviewer}).
-                </p>
+                <FeedbackLoop status={r.status} decision={q.data.decisions.find((d) => d.action !== "NOTE")} />
               ) : (
-                <p className="text-[13px] text-fg-2">No automatic review trigger. The AI analysis still needs human validation before action; use “Send to reviewer” to request it.</p>
+                <p className="text-[13px] text-fg-2">Engine analyzed; no automatic review trigger. The engine result still needs HSE reviewer validation before action; use “Send to reviewer” to request it.</p>
               )}
             </Panel>
 
-            <Panel title="Priority score" id="priority">
+            <Panel title="Priority score" subtitle="Attention priority, separate from classification" id="priority">
               <PriorityBreakdown analysis={a} />
             </Panel>
 
-            <Panel title="Confidence" subtitle="Explainable: combined from four evidence components" id="confidence">
+            <Panel title="Evidence confidence" subtitle="How certain the engine is about the extracted and classified evidence" id="confidence">
               <ConfidenceBreakdown analysis={a} />
+            </Panel>
+
+            <Panel title="Evidence coverage" subtitle="Whether the report contains the evidence the SCL checks need" id="coverage">
+              <EvidenceCoverage analysis={a} report={r} />
             </Panel>
 
             <Panel title="Recurring patterns" id="pat">
@@ -295,7 +338,7 @@ export default function ReportDetailPage() {
                       <p className="text-muted">{fmtDateTime(d.created_at)}</p>
                       {d.decision && Object.keys(d.decision).length ? (
                         <p className="mt-1 text-fg-2">
-                          AI: {String(d.original_prediction.scl_class)} / {String(d.original_prediction.sif_signal)} / {String(d.original_prediction.primary_lsr)} → Final: {String(d.decision.scl_class)} / {String(d.decision.sif_signal)} / {String(d.decision.primary_lsr)}
+                          Engine: {String(d.original_prediction.scl_class)} / {String(d.original_prediction.sif_signal)} / {String(d.original_prediction.primary_lsr)} → Final: {String(d.decision.scl_class)} / {String(d.decision.sif_signal)} / {String(d.decision.primary_lsr)}
                         </p>
                       ) : null}
                       {d.reason ? <p className="mt-1 text-fg-2">Reason: {d.reason}</p> : null}
@@ -310,7 +353,7 @@ export default function ReportDetailPage() {
                     <li key={e.id} className="relative text-[12px]">
                       <span className="absolute -left-[16.5px] top-1 size-2 rounded-full border border-border-strong bg-surface" aria-hidden />
                       <p className="font-mono text-[10.5px] uppercase tracking-wider text-muted">
-                        {e.event_type} · {fmtDateTime(e.created_at)}
+                        <span title={e.event_type}>{EVENT_LABELS[e.event_type] ?? e.event_type}</span> · {fmtDateTime(e.created_at)}
                       </p>
                       <p className="text-fg-2">
                         {e.summary} <span className="text-muted">— {e.actor}</span>
@@ -320,7 +363,7 @@ export default function ReportDetailPage() {
                 </ol>
               ) : (
                 <p className="flex items-center gap-2 text-[12.5px] text-muted">
-                  <History className="size-3.5" aria-hidden /> Seeded synthetic record — analysed during dataset seeding (see Audit Log: DATASET_SEEDED).
+                  <History className="size-3.5" aria-hidden /> Seeded synthetic record — analysed during dataset seeding (see Audit Log: “Synthetic dataset seeded”).
                 </p>
               )}
             </Panel>

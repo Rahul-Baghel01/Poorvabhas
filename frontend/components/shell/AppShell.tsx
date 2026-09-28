@@ -199,7 +199,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <span className="inline-flex shrink-0 items-center gap-1.5 rounded-xs border border-amber/40 bg-amber/10 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.1em] text-amber" title="All data in this environment is synthetic. No OIL production data.">
             <Activity className="size-3" aria-hidden />
             <span className="hidden xl:inline">Demo environment — synthetic safety data</span>
-            <span className="xl:hidden">Synthetic<span className="hidden sm:inline"> data</span></span>
+            <span className="xl:hidden">Synthetic<span className="hidden sm:inline"> / proxy data</span></span>
           </span>
           <SystemStatus />
           {user ? (

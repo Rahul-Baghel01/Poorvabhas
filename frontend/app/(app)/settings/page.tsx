@@ -136,7 +136,7 @@ export default function SettingsPage() {
   const q = useQuery({ queryKey: ["settings"], queryFn: () => api<SettingsOut>("/settings") });
   return (
     <RequirePermission perm="settings">
-      <PageHeader eyebrow="Administration / configuration" title="Settings" subtitle="Engine configuration, scoring model, data mode and system information. Changes apply to new analyses and are audited." />
+      <PageHeader eyebrow="Administration / configuration" title="Settings" subtitle="Engine configuration, priority scoring model, data mode and system information. Changes apply to new analyses and are audited." />
       {q.isError ? (
         <ErrorState error={q.error} onRetry={() => q.refetch()} />
       ) : !q.data ? (
@@ -152,7 +152,7 @@ export default function SettingsPage() {
             <Panel title="Analysis engine" id="s-engine">
               <EngineSettings s={q.data.engine} />
             </Panel>
-            <Panel title="Scoring model" subtitle="100-point priority weights (must total 100)" id="s-weights">
+            <Panel title="Priority scoring model" subtitle="100-point attention-priority weights (must total 100). Separate from the SIF classification and from the ML classifier." id="s-weights">
               <Weights initial={q.data.engine.priority_weights} />
             </Panel>
             <Panel title="Priority levels" subtitle="Score thresholds" id="s-thresh">

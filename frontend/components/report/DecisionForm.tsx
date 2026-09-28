@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, CircleHelp, CircleX, PencilLine, StickyNote } from "lucide-react";
+import { CheckCircle2, CircleHelp, PencilLine, SlidersHorizontal, StickyNote } from "lucide-react";
 import * as React from "react";
 
 import { Button, Field, Select, Textarea } from "@/components/ui/primitives";
@@ -17,12 +17,18 @@ export interface DecisionPayload {
   note?: string | null;
 }
 
-const ACTIONS: { key: DecisionAction; label: string; icon: React.ElementType; hint: string }[] = [
-  { key: "CONFIRM", label: "Confirm", icon: CheckCircle2, hint: "The AI classification is correct" },
-  { key: "CHANGE", label: "Change", icon: PencilLine, hint: "Correct the SCL class, SIF potential or Life-Saving Rule" },
-  { key: "REJECT", label: "Reject", icon: CircleX, hint: "The AI classification is wrong" },
-  { key: "INSUFFICIENT", label: "Insufficient info", icon: CircleHelp, hint: "The report cannot be classified as written" },
-  { key: "NOTE", label: "Add note", icon: StickyNote, hint: "Record a note without closing the review" },
+type Choice = "CONFIRM" | "CORRECT" | "REFINE";
+type Refinement = "INSUFFICIENT" | "NOTE";
+
+const CHOICES: { key: Choice; label: string; icon: React.ElementType; hint: string }[] = [
+  { key: "CONFIRM", label: "Confirm", icon: CheckCircle2, hint: "The engine classification is correct" },
+  { key: "CORRECT", label: "Correct", icon: PencilLine, hint: "Set the correct SCL class, SIF-potential or Life-Saving Rule" },
+  { key: "REFINE", label: "Refine", icon: SlidersHorizontal, hint: "Mark insufficient information, or add a note without closing the review" },
+];
+
+const REFINEMENTS: { key: Refinement; label: string; icon: React.ElementType; hint: string }[] = [
+  { key: "INSUFFICIENT", label: "Insufficient information", icon: CircleHelp, hint: "The report cannot be classified as written" },
+  { key: "NOTE", label: "Add note only", icon: StickyNote, hint: "Record a note; the review stays open" },
 ];
 
 export function DecisionForm({ idPrefix, current, onSubmit, busy, error }: {
@@ -32,19 +38,21 @@ export function DecisionForm({ idPrefix, current, onSubmit, busy, error }: {
   busy?: boolean;
   error?: string | null;
 }) {
-  const [action, setAction] = React.useState<DecisionAction>("CONFIRM");
+  const [choice, setChoice] = React.useState<Choice>("CONFIRM");
+  const [refinement, setRefinement] = React.useState<Refinement>("INSUFFICIENT");
   const [scl, setScl] = React.useState<string>("");
   const [sif, setSif] = React.useState<string>("");
   const [lsr, setLsr] = React.useState<string>("");
   const [reason, setReason] = React.useState("");
   const [note, setNote] = React.useState("");
-  const needsReason = action === "REJECT" || action === "CHANGE";
+  const action: DecisionAction = choice === "CONFIRM" ? "CONFIRM" : choice === "CORRECT" ? "CHANGE" : refinement;
+  const needsReason = action === "CHANGE";
   const changeInvalid = action === "CHANGE" && !scl && !sif && !lsr;
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
     const p: DecisionPayload = { action, reason: reason || null, note: note || null };
-    if (action === "CHANGE" || action === "REJECT") {
+    if (action === "CHANGE") {
       if (scl) p.scl_class = scl;
       if (sif) p.sif_potential = sif === "true";
       if (lsr) p.primary_lsr = lsr;
@@ -55,30 +63,31 @@ export function DecisionForm({ idPrefix, current, onSubmit, busy, error }: {
   return (
     <form onSubmit={submit} className="flex flex-col gap-3" aria-label="Reviewer decision">
       <fieldset>
-        <legend className="label-tech mb-2">Reviewer action</legend>
-        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-5">
-          {ACTIONS.map((a) => {
+        <legend className="label-tech mb-2">HSE reviewer action</legend>
+        <div className="grid grid-cols-3 gap-1.5">
+          {CHOICES.map((a) => {
             const Icon = a.icon;
-            const on = action === a.key;
+            const on = choice === a.key;
             return (
               <label
                 key={a.key}
                 title={a.hint}
                 className={cn(
                   "flex cursor-pointer items-center justify-center gap-1.5 rounded-sm border px-2 py-2 text-[12px] transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-cyan",
-                  on ? (a.key === "CONFIRM" ? "border-green/60 bg-green/10 text-green" : a.key === "REJECT" ? "border-red/60 bg-red/10 text-red" : "border-amber/60 bg-amber/10 text-amber") : "border-border text-fg-2 hover:border-border-strong hover:text-fg",
+                  on ? (a.key === "CONFIRM" ? "border-green/60 bg-green/10 text-green" : "border-amber/60 bg-amber/10 text-amber") : "border-border text-fg-2 hover:border-border-strong hover:text-fg",
                 )}
               >
-                <input type="radio" name={`${idPrefix}-action`} value={a.key} checked={on} onChange={() => setAction(a.key)} className="sr-only" />
+                <input type="radio" name={`${idPrefix}-action`} value={a.key} checked={on} onChange={() => setChoice(a.key)} className="sr-only" />
                 <Icon className="size-3.5" aria-hidden />
                 {a.label}
               </label>
             );
           })}
         </div>
+        <p className="mt-1.5 text-[11.5px] text-muted">{CHOICES.find((c) => c.key === choice)?.hint}.</p>
       </fieldset>
 
-      {action === "CHANGE" || action === "REJECT" ? (
+      {choice === "CORRECT" ? (
         <div className="grid gap-2 sm:grid-cols-3">
           <Field label="SCL class" htmlFor={`${idPrefix}-scl`}>
             <Select id={`${idPrefix}-scl`} value={scl} onChange={(e) => setScl(e.target.value)}>
@@ -90,11 +99,11 @@ export function DecisionForm({ idPrefix, current, onSubmit, busy, error }: {
               ))}
             </Select>
           </Field>
-          <Field label="SIF potential" htmlFor={`${idPrefix}-sif`}>
+          <Field label="SIF-potential" htmlFor={`${idPrefix}-sif`}>
             <Select id={`${idPrefix}-sif`} value={sif} onChange={(e) => setSif(e.target.value)}>
-              <option value="">{action === "REJECT" ? "Derive / flip" : "Derive from class"}</option>
-              <option value="true">Yes — SIF potential</option>
-              <option value="false">No — not SIF potential</option>
+              <option value="">Derive from SCL class</option>
+              <option value="true">Yes — SIF-potential</option>
+              <option value="false">No — not SIF-potential</option>
             </Select>
           </Field>
           <Field label="Life-Saving Rule" htmlFor={`${idPrefix}-lsr`}>
@@ -110,9 +119,35 @@ export function DecisionForm({ idPrefix, current, onSubmit, busy, error }: {
         </div>
       ) : null}
 
+      {choice === "REFINE" ? (
+        <fieldset>
+          <legend className="sr-only">Refinement</legend>
+          <div className="grid grid-cols-2 gap-1.5">
+            {REFINEMENTS.map((r) => {
+              const Icon = r.icon;
+              const on = refinement === r.key;
+              return (
+                <label
+                  key={r.key}
+                  title={r.hint}
+                  className={cn(
+                    "flex cursor-pointer items-center justify-center gap-1.5 rounded-sm border px-2 py-1.5 text-[12px] transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-cyan",
+                    on ? "border-amber/60 bg-amber/10 text-amber" : "border-border text-fg-2 hover:border-border-strong hover:text-fg",
+                  )}
+                >
+                  <input type="radio" name={`${idPrefix}-refine`} value={r.key} checked={on} onChange={() => setRefinement(r.key)} className="sr-only" />
+                  <Icon className="size-3.5" aria-hidden />
+                  {r.label}
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+      ) : null}
+
       {action !== "NOTE" ? (
         <Field label={needsReason ? "Reason (required)" : "Reason"} htmlFor={`${idPrefix}-reason`}>
-          <Textarea id={`${idPrefix}-reason`} value={reason} onChange={(e) => setReason(e.target.value)} className="min-h-16" placeholder={needsReason ? "Why is the AI classification wrong?" : "Optional rationale"} required={needsReason} />
+          <Textarea id={`${idPrefix}-reason`} value={reason} onChange={(e) => setReason(e.target.value)} className="min-h-16" placeholder={needsReason ? "Why is the engine classification wrong?" : "Optional rationale"} required={needsReason} />
         </Field>
       ) : null}
       <Field label={action === "NOTE" ? "Note (required)" : "Note"} htmlFor={`${idPrefix}-note`}>
@@ -124,7 +159,11 @@ export function DecisionForm({ idPrefix, current, onSubmit, busy, error }: {
         </p>
       ) : null}
       <div className="flex items-center justify-between gap-3">
-        <p className="text-[11.5px] text-muted">Decision, identity and timestamp are recorded in the audit log and stored as a feedback example.</p>
+        <p className="text-[11.5px] text-muted">
+          {action === "NOTE"
+            ? "The note is recorded in the audit log; the review stays open."
+            : "Decision, reviewer and time are audited and stored as a labelled feedback example. Retraining is a separate, controlled admin action."}
+        </p>
         <Button type="submit" variant={action === "CONFIRM" ? "primary" : "amber"} loading={busy} disabled={changeInvalid || (needsReason && !reason.trim()) || (action === "NOTE" && !note.trim())}>
           {action === "NOTE" ? "Save note" : "Record decision"}
         </Button>

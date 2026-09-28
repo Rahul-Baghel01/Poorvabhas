@@ -2,15 +2,18 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Info, Network } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
-import { HBarList, TrendChart } from "@/components/charts/charts";
+import { HBarList } from "@/components/charts/charts";
 import { LsrTag, PriorityBadge, SifBadge, StatusBadge, TrendBadge } from "@/components/ui/badges";
 import { EmptyState, ErrorState, KV, LoadingState, Notice, Panel } from "@/components/ui/primitives";
 import { api, ApiError } from "@/lib/api";
 import { fmtDate, titleCase } from "@/lib/format";
 import type { Dist, PatternOut } from "@/lib/types";
+
+const TrendChart = dynamic(() => import("@/components/charts/timeseries").then((m) => m.TrendChart), { ssr: false, loading: () => <LoadingState rows={6} /> });
 
 function DistPanel({ title, rows, color }: { title: string; rows: Dist[]; color?: string }) {
   return (
@@ -46,7 +49,7 @@ export default function PatternDetailPage() {
         </div>
         <dl className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
           <KV k="Occurrences" v={<span className="num font-mono text-[18px]">{p.occurrences}</span>} />
-          <KV k="With SIF signal" v={<span className="num font-mono text-[18px] text-red">{p.sif_occurrences}</span>} />
+          <KV k="SIF-potential (incl. any SIF Event)" v={<span className="num font-mono text-[18px] text-red">{p.sif_occurrences}</span>} />
           <KV k="Cohesion" v={<span className="num font-mono">{p.cohesion.toFixed(2)}</span>} />
           <KV k="Confidence" v={<span className="num font-mono">{p.confidence.toFixed(2)}</span>} />
           <KV k="First seen" v={fmtDate(p.first_seen)} />
@@ -82,7 +85,7 @@ export default function PatternDetailPage() {
         <Panel title="Sites">
           <HBarList valueLabel="Occurrences" color="#8a9597" rows={p.sites.map((s) => ({ key: s.name, label: s.name, value: s.count }))} />
         </Panel>
-        <Panel title="Associated Life-Saving Rules" subtitle="Proposed crosswalk — requires HSE expert validation">
+        <Panel title="Associated Life-Saving Rules" subtitle="Proposed IOGP LSR crosswalk — subject to HSE expert validation">
           <HBarList valueLabel="Occurrences" rows={p.associated_lsr.map((s) => ({ key: s.code, label: <LsrTag code={s.code} name={s.name} />, value: s.count }))} />
         </Panel>
       </div>

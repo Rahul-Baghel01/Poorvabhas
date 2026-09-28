@@ -1,6 +1,6 @@
 # Demo script (≈ 10 minutes)
 
-**Setup:** `docker compose up` (or the dev setup), open http://localhost:3000 in a 1440 px wide window. Have `docs/sample-import.csv` ready. To start from a clean dataset: `docker compose down -v && docker compose up`, or run `python -m app.seed.seed --reset` in the backend.
+**Setup:** use the live demo at https://poorvabhas.vercel.app, or `docker compose up` (or the dev setup) and open http://localhost:3000, in a 1440 px wide window. Have `docs/sample-import.csv` ready. To start a **local** demo from a clean dataset: `docker compose down -v && docker compose up`, or run `python -m app.seed.seed --reset` in the backend. Never reset the production (Neon) database; demo actions there add real records.
 
 **One-line pitch:** *Poorvabhas reads OIL's unsafe-act and near-miss reports, judges the hazard rather than the outcome, and shows HSE where fatal potential is concentrated. A human always makes the final call.*
 
@@ -18,8 +18,8 @@
 | 10 | **IOGP mapping.** Point at the amber disclaimer. | "Energy Isolation. This is our proposed crosswalk and needs independent HSE expert validation." |
 | 11 | **Priority score** and **Confidence** breakdowns. | "Transparent 100-point model and explainable confidence, with a classifier second opinion." |
 | 12 | Go to **Safety Reports → New report**, click the demo case **Vehicle + pedestrian**, click **ANALYZE REPORT**. Watch the live pipeline. | "The report says a pedestrian was nearby, but not whether there was segregation. The engine won't assume, so it routes to a reviewer as *Insufficient information*." |
-| 13 | **Open full investigation** → in *Review status* choose **Change**, SCL class **Exposure**, reason "No pedestrian segregation at the gantry", **Record decision**. | "The reviewer decides. Original prediction, decision, identity, time, reason and note are all stored, and the case becomes a feedback example for controlled retraining." |
-| 14 | Scroll to **Audit history**. | "REPORT_CREATED → ANALYZED → SIF_CLASSIFIED → RULE_MAPPED → REVIEW_STARTED → REVIEW_COMPLETED." |
+| 13 | **Open full investigation** → in *Review status* choose **Correct**, SCL class **Exposure**, reason "No pedestrian segregation at the gantry", **Record decision**. The status becomes **Expert corrected** and the feedback loop shows *Correction stored as feedback → Controlled retraining (admin action)*. | "The reviewer decides. Original engine output, decision, identity, time, reason and note are all stored, and the correction becomes a labelled feedback example for controlled retraining — nothing retrains automatically." |
+| 14 | Scroll to **Audit history**. | "Report created → Report analyzed → SCL classified → LSR mapped → Review requested → Review decision." |
 | 15 | **Pattern explorer.** | "Patterns are mined from the data with HDBSCAN, not hard-coded." |
 | 16 | Open **Hot work + gas testing failure** (marked *Increasing*). | "Trend claimed by CUSUM/EWMA on real dates; small patterns say *Insufficient history*." |
 | 17 | Scroll to **SIF precursor density ranking**; switch *site / activity*. | "Empirical-Bayes adjusted, so a site with nine reports doesn't top the list by luck. The wording: *highest adjusted signal in this dataset*, never 'most dangerous site'." |

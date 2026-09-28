@@ -10,7 +10,7 @@ import type { EntityOut } from "@/lib/types";
 describe("badges", () => {
   it("labels SIF signals and trends in text, not colour alone", () => {
     render(<SifBadge signal="SIF_POTENTIAL" />);
-    expect(screen.getByText("SIF POTENTIAL")).toBeInTheDocument();
+    expect(screen.getByText("SIF-POTENTIAL")).toBeInTheDocument();
     render(<TrendBadge trend="INSUFFICIENT_HISTORY" />);
     expect(screen.getByText("Insufficient history")).toBeInTheDocument();
     render(<ControlAnswerBadge answer="INSUFFICIENT" />);
@@ -52,10 +52,10 @@ describe("DecisionForm", () => {
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ action: "CONFIRM" }));
   });
 
-  it("requires a reason and a change before a CHANGE decision can be submitted", () => {
+  it("requires a reason and a change before a correction can be submitted", () => {
     const onSubmit = vi.fn();
     render(<DecisionForm idPrefix="t2" current={current} onSubmit={onSubmit} />);
-    fireEvent.click(screen.getByLabelText("Change"));
+    fireEvent.click(screen.getByLabelText("Correct"));
     const btn = screen.getByRole("button", { name: /record decision/i });
     expect(btn).toBeDisabled();
     fireEvent.change(screen.getByLabelText("SCL class"), { target: { value: "SUCCESS" } });
@@ -64,5 +64,19 @@ describe("DecisionForm", () => {
     expect(btn).not.toBeDisabled();
     fireEvent.click(btn);
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ action: "CHANGE", scl_class: "SUCCESS", reason: "Barricade was in place" }));
+  });
+
+  it("refines as insufficient information, or as a note that keeps the review open", () => {
+    const onSubmit = vi.fn();
+    render(<DecisionForm idPrefix="t3" current={current} onSubmit={onSubmit} />);
+    fireEvent.click(screen.getByLabelText("Refine"));
+    fireEvent.click(screen.getByRole("button", { name: /record decision/i }));
+    expect(onSubmit).toHaveBeenLastCalledWith(expect.objectContaining({ action: "INSUFFICIENT" }));
+    fireEvent.click(screen.getByLabelText("Add note only"));
+    const save = screen.getByRole("button", { name: /save note/i });
+    expect(save).toBeDisabled();
+    fireEvent.change(screen.getByLabelText(/Note \(required\)/), { target: { value: "Asked supervisor for the permit" } });
+    fireEvent.click(save);
+    expect(onSubmit).toHaveBeenLastCalledWith(expect.objectContaining({ action: "NOTE", note: "Asked supervisor for the permit" }));
   });
 });

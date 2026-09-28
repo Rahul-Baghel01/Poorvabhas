@@ -5,8 +5,8 @@ import { Info } from "lucide-react";
 import { LSR_ICON, LsrTag } from "@/components/ui/badges";
 import { Badge, Meter } from "@/components/ui/primitives";
 import { Quote } from "@/components/report/EvidenceText";
-import type { Analysis } from "@/lib/types";
-import { cn } from "@/lib/format";
+import type { Analysis, ReportDetail } from "@/lib/types";
+import { ENTITY_LABELS, cn } from "@/lib/format";
 
 const PRIORITY_COLORS: Record<string, string> = {
   energy_exposure: "#FF4A43",
@@ -45,7 +45,9 @@ export function PriorityBreakdown({ analysis }: { analysis: Analysis }) {
           </li>
         ))}
       </ul>
-      <p className="text-[11px] text-muted">Transparent additive model; weights configurable in Settings.</p>
+      <p className="text-[11px] text-muted">
+        Priority ranks where to look first; it is a separate output from the SIF classification. It combines SIF-potential (precursor severity), energy exposure, control status, recurrence and context. Transparent additive model; weights in Settings → Priority scoring model.
+      </p>
     </div>
   );
 }
@@ -59,12 +61,13 @@ export function ConfidenceBreakdown({ analysis }: { analysis: Analysis }) {
         <p className="num font-mono text-[34px] font-semibold leading-none text-fg">{analysis.confidence.toFixed(2)}</p>
         <Badge tone={tone}>{analysis.confidence_level}</Badge>
       </div>
+      <p className="text-[11.5px] text-muted">How certain the engine is about the evidence it extracted and classified. Whether the report contains enough evidence is shown separately as Evidence coverage; the score applies it as one weighted component.</p>
       <ul className="flex flex-col gap-2.5">
         {b.components.map((c) => (
           <li key={c.key}>
             <div className="flex items-center justify-between text-[12.5px]">
               <span className="text-fg">
-                {c.label} <span className="text-muted">×{c.weight}</span>
+                {c.key === "completeness" ? "Coverage component" : c.label} <span className="text-muted">×{c.weight}</span>
               </span>
               <span className="num font-mono text-fg-2">{c.value.toFixed(2)}</span>
             </div>
@@ -78,7 +81,7 @@ export function ConfidenceBreakdown({ analysis }: { analysis: Analysis }) {
         {analysis.ml_probability !== null ? (
           <>
             <p>
-              P(SIF potential) = <span className="num font-mono text-fg">{analysis.ml_probability.toFixed(2)}</span>{" "}
+              P(SIF-potential) = <span className="num font-mono text-fg">{analysis.ml_probability.toFixed(2)}</span>{" "}
               <span className="text-muted">({analysis.ml_model_version})</span>
             </p>
             {b.ml_agreement !== null ? <p className="mt-0.5">Agreement with SCL engine: {b.ml_agreement.toFixed(2)}</p> : null}
@@ -110,7 +113,7 @@ export function MappingPanel({ analysis }: { analysis: Analysis }) {
       <div className="flex items-start gap-3 rounded-sm border border-cyan/40 bg-cyan/[0.06] p-3.5">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-sm border border-cyan/40 bg-bg">{Icon ? <Icon className="size-5 text-cyan" aria-hidden /> : null}</span>
         <div className="min-w-0 flex-1">
-          <p className="label-tech">Primary Life-Saving Rule</p>
+          <p className="label-tech">Suggested LSR — proposed crosswalk</p>
           <p className="mt-0.5 text-[17px] font-semibold text-fg">{m.primary.name}</p>
           <p className="num mt-0.5 font-mono text-[11.5px] text-fg-2">
             mapping confidence {m.confidence.toFixed(2)} · score {m.primary.score.toFixed(1)}
@@ -149,7 +152,7 @@ export function MappingPanel({ analysis }: { analysis: Analysis }) {
       <p className="flex gap-2 rounded-sm border border-amber/30 bg-amber/[0.06] px-2.5 py-2 text-[11.5px] text-fg-2">
         <Info className="mt-0.5 size-3.5 shrink-0 text-amber" aria-hidden />
         <span>
-          <span className="font-semibold text-amber">{m.label}.</span> {m.disclaimer}. This SCL-to-IOGP mapping is the Poorvabhas team&apos;s proposal, not an official IOGP mapping.
+          <span className="font-semibold text-amber">{m.label}.</span> {m.disclaimer}. This SCL-to-IOGP mapping is the Poorvabhas team&apos;s proposal, not an official IOGP or OIL mapping. It is a separate output and does not determine the SIF classification.
         </span>
       </p>
     </div>
@@ -181,5 +184,45 @@ export function PipelineTrace({ trace, animate }: { trace: { stage: string; labe
         );
       })}
     </ol>
+  );
+}
+
+export function EvidenceCoverage({ analysis, report }: { analysis: Analysis; report: ReportDetail["report"] }) {
+  const onPath = analysis.scl.gates.filter((g) => g.used_in_path);
+  const answered = onPath.filter((g) => g.answer !== "INSUFFICIENT");
+  const unanswered = onPath.filter((g) => g.answer === "INSUFFICIENT");
+  const fields: [string, string | null][] = [
+    ["Activity", report.activity],
+    ["Location", report.location],
+    ["Equipment", report.equipment],
+  ];
+  const present = fields.filter(([, v]) => v).length;
+  const coverage = analysis.confidence_breakdown.components.find((c) => c.key === "completeness")?.value ?? null;
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-end justify-between">
+        <p className="num font-mono text-[34px] font-semibold leading-none text-fg">
+          {answered.length}
+          <span className="text-[14px] text-muted"> / {onPath.length} SCL gates</span>
+        </p>
+        {coverage !== null ? <Badge tone={coverage >= 0.75 ? "green" : coverage >= 0.55 ? "amber" : "red"}>{coverage.toFixed(2)}</Badge> : null}
+      </div>
+      {coverage !== null ? <Meter value={coverage} tone={coverage >= 0.75 ? "green" : coverage >= 0.55 ? "amber" : "red"} label="Evidence coverage" /> : null}
+      <p className="text-[11.5px] text-muted">Whether the report states enough to decide: SCL gates on the decision path supported by report text, key fields present, and facts not stated.</p>
+      <ul className="flex flex-col gap-1.5 text-[12.5px]">
+        <li className="flex justify-between gap-2">
+          <span className="text-fg-2">Key fields present</span>
+          <span className="num font-mono text-fg">{present}/3</span>
+        </li>
+        {unanswered.length ? (
+          <li className="text-amber">Insufficient information: {unanswered.map((g) => g.question).join(" · ")}</li>
+        ) : null}
+        {analysis.not_stated.length ? (
+          <li className="text-fg-2">
+            <span className="text-muted">Not stated:</span> {analysis.not_stated.map((t) => ENTITY_LABELS[t] ?? t).join(", ")}
+          </li>
+        ) : null}
+      </ul>
+    </div>
   );
 }

@@ -158,7 +158,7 @@ SUGGESTED_ACTIONS = {
     "MODEL_RULE_DISAGREEMENT": "Classifier and deterministic engine disagree - read the evidence and decide SIF potential.",
     "BORDERLINE": "A decision gate rests on weak evidence - confirm or correct the SCL path.",
     "LOW_CONFIDENCE": "Overall confidence is low - verify extraction and classification before acting.",
-    "MANUAL_REQUEST": "Reviewer requested by HSE officer - validate the AI classification.",
+    "MANUAL_REQUEST": "Reviewer requested by HSE officer - validate the engine classification.",
 }
 
 

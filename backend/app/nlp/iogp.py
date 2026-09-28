@@ -17,7 +17,7 @@ from typing import Any
 
 from app.nlp.extraction import ExtractionResult
 
-CROSSWALK_LABEL = "Proposed crosswalk"
+CROSSWALK_LABEL = "Proposed IOGP LSR crosswalk"
 CROSSWALK_DISCLAIMER = "Requires independent HSE expert validation"
 FALLBACK_CODE = "PROCESS_SAFETY_NA"
 

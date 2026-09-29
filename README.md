@@ -1,285 +1,493 @@
 # Poorvabhas
 
-> **Detecting fatal potential before the outcome.**
-> *Judge the hazard, not the outcome.*
+AI/NLP-based HSE decision support for identifying Serious Injury & Fatality (SIF)-potential precursors in safety reports.
+
+> Detecting fatal potential before the outcome.
+
+**Decision support for identifying fatal potential before the outcome.** Poorvabhas examines hazard, energy and control evidence in free-text reports, explains its assessment, and helps a human HSE reviewer decide which cases need attention.
+
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?logo=fastapi&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs)
+![React](https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
+![pgvector](https://img.shields.io/badge/Embeddings-pgvector-4169E1)
+![Docker Compose](https://img.shields.io/badge/Local-Docker_Compose-2496ED?logo=docker&logoColor=white)
 
 **SIH 2026 · Problem Statement 26165 · Oil India Limited (OIL)**
-AI/NLP engine to detect Serious Injury & Fatality (SIF) precursors in unsafe-act, unsafe-condition and near-miss reports.
 
-> **DEMO ENVIRONMENT — SYNTHETIC SAFETY DATA.** Every report, site profile, exposure denominator and contractor in this repository is synthetic. No OIL production data is included. Poorvabhas is a **decision-support system**: it does not predict fatalities, accidents, injuries or individual outcomes. It helps HSE officers decide where to look first. The final safety decision always belongs to a human HSE reviewer.
+**DEMO ENVIRONMENT — SYNTHETIC SAFETY DATA.** Seeded reports, site profiles, contractors and exposure hours are synthetic/proxy data. This repository does not contain confidential OIL production reports. Poorvabhas is a prototype with a human review workflow; real-world effectiveness requires an independently labelled pilot.
 
----
+**Evaluator starting point:** [Local setup](#15-local-setup) → [Demo walkthrough](#18-evaluator-demo) → [Testing and evaluation](#19-testing--evaluation).
 
-## Contents
+## 1. SIH 2026 Problem Statement
 
-- [Overview](#overview)
-- [Problem statement](#problem-statement)
-- [Why it matters](#why-it-matters)
-- [How it works](#how-it-works)
-- [Architecture](#architecture)
-- [System workflow](#system-workflow)
-- [SCL classification](#scl-classification)
-- [IOGP mapping](#iogp-mapping)
-- [Pattern mining](#pattern-mining)
-- [Ranking](#ranking)
-- [Human review](#human-review)
-- [Technology stack](#technology-stack)
-- [Database](#database)
-- [API](#api)
-- [Installation](#installation)
-- [Development](#development)
-- [Docker](#docker)
-- [Demo credentials](#demo-credentials)
-- [Synthetic dataset](#synthetic-dataset)
-- [Testing](#testing)
-- [Limitations](#limitations)
-- [Future pilot](#future-pilot)
-- [Research references](#research-references)
-- [Important disclaimer](#important-disclaimer)
+**Problem Statement ID:** 26165
 
----
+**Title:** AI/NLP Engine to Detect Serious Injury & Fatality (SIF) Precursors in OIL's Unsafe-Act/Unsafe-Condition and Near-Miss Reports
 
-## Overview
+The problem statement concerns reviewing large volumes of Unsafe Act / Unsafe Condition (UA/UC), Near-Miss and Incident reports. Outcome-based review can overlook a low-consequence event describing conditions capable of producing serious injury or fatality. An unverified isolation with residual pressure remains an important precursor even when work stops before anyone is hurt.
 
-Poorvabhas reads free-text safety reports and turns them into an evidence trail an HSE officer can check:
+Poorvabhas focuses on the underlying hazard, energy and control evidence. Its implementation demonstrates a review workflow using synthetic reports, without assuming access to OIL's private operational systems.
 
-| Step | What happens | Where you see it |
-|---|---|---|
-| NLP extraction | Activity, energy source, hazard, barrier/control, failure mode, behaviour, context — each with its **source text span** and confidence. Anything not in the text is reported as **Not stated**. | Report detail → *NLP extraction*, highlighted text |
-| Hazard reasoning | Four SCL decision gates (high energy? energy event? direct control? serious injury?) answered **YES / NO / INSUFFICIENT**, each with evidence. | Report detail → *SCL decision* |
-| SIF potential | SCL class (HSIF, PSIF, Exposure, Capacity, Success, LSIF, Low severity). Prototype SIF-potential = **PSIF + Exposure** (configurable). | Badges everywhere, Command center |
-| Rule mapping | IOGP Life-Saving Rule — **proposed crosswalk, requires independent HSE expert validation**. | Report detail → *IOGP mapping* |
-| Patterns | Recurring activity + failed barrier + energy combinations mined with HDBSCAN; trends tested with EWMA + CUSUM. | Pattern explorer |
-| Ranking | Sites / activities / locations ranked by **empirical-Bayes adjusted** SIF-precursor density, not raw counts. | Command center, Pattern explorer |
-| Human review | Uncertain or conflicting cases are routed to a reviewer; every decision is audited and stored as a feedback example. | Review queue, Audit log |
+## 2. Solution Overview
 
-Everything runs locally. **No external LLM or cloud AI API is used or required.**
+Poorvabhas turns a safety narrative into an evidence-supported assessment, proposed rule mapping, recurring-pattern context and review priority. The final HSE decision remains with a human reviewer.
 
-## Problem statement
-
-OIL collects large volumes of unsafe-act (UA), unsafe-condition (UC) and near-miss reports. Most are low severity; a small fraction describe situations where only luck prevented a fatality. Those precursors are buried in free text and are usually graded by what happened (the outcome) rather than by what could have happened (the hazard). The prototype must:
-
-1. Classify reports as SIF-potential vs non-SIF-potential.
-2. Map relevant reports to the IOGP Life-Saving Rules.
-3. Surface recurring precursor patterns (activity, location, barrier failure).
-4. Rank sites/activities by SIF-precursor density in an interactive dashboard.
-5. Let HSE personnel focus interventions where fatal potential is highest.
-
-## Why it matters
-
-Serious injuries and fatalities do not fall in step with minor-injury rates. A near miss where a suspended load swung past a rigger looks "harmless" by outcome but had fatal potential. The Safety Classification and Learning (SCL) approach asks the right questions — *was high energy present, and was a direct control in place?* Poorvabhas answers those questions at scale, shows its evidence, and hands the call to a person.
-
-## How it works
-
-```
-REPORTS → FREE TEXT → NLP UNDERSTANDING → ENERGY + CONTROL → SIF POTENTIAL
-        → IOGP 9-RULE MAPPING → RECURRING PATTERNS → FAIR RANKING → HUMAN REVIEW → FEEDBACK
+```text
+Report → Text Understanding → Evidence Extraction → Energy + Control Assessment
+       → SCL Classification → SIF/PSIF Potential Assessment
+       → Proposed IOGP LSR Crosswalk → Pattern Mining / Recurrence Context
+       → Priority Scoring → HSE Review → Controlled Feedback / Retraining
 ```
 
-1. **Level 1 — deterministic NLP.** Structured vocabularies (energy, barriers, activities, behaviours, context), regex/phrase matching, abbreviation and synonym normalisation (`LOTO`, `lock out`, `lockout` → energy isolation; `PTW`, `PPE`, `JSA`, `BOP`, `SIMOPS`…), spaCy sentence segmentation and clause-level barrier-state detection ("isolation **was not verified**", "**without** atmospheric monitoring").
-2. **Level 2 — classical ML.** A `SafetyClassifier` abstraction with a TF-IDF + Logistic Regression implementation gives a second opinion P(SIF potential). Disagreement with the rule engine sends the case to review.
-3. **Level 3 — transformer-ready.** `TransformerSafetyClassifier` plugs a locally stored HuggingFace model (e.g. DistilBERT) into the same interface when `transformers` + `torch` are installed. Without them the system falls back automatically.
+The per-report pipeline checks recurrence and existing pattern matches; pattern mining is a separate dataset operation during seeding, CSV import, bulk reanalysis or an explicit admin action. Creating a single report does not re-mine the dataset. Reviewer feedback is stored for later controlled retraining.
 
-Confidence is **explainable** (extraction, gate, completeness and mapping components). Priority is a **transparent 100-point additive score** with configurable weights. See [docs/scl-engine.md](docs/scl-engine.md).
+The default intelligence combines deterministic vocabularies, phrase/regex matching, abbreviation normalization and spaCy sentence segmentation with a **TF-IDF + Logistic Regression classifier second opinion**. The SCL engine determines classification; classifier disagreement can route a case to review. If the classifier is unavailable, deterministic analysis remains available.
 
-## Architecture
+## 3. Key Capabilities
 
+### Report Ingestion
+
+- Manual entry of **Unsafe Act, Unsafe Condition, Near Miss and Incident** reports.
+- CSV validation, row preview, error reporting and import of valid rows through the analysis pipeline.
+- Required context: report type, date, site, location, activity and description.
+- Search, filters, pagination and report investigation links.
+
+CSV validation sessions are database-backed, tied to the validating user and expire after 30 minutes. Uploads are capped at 4 MB. See [sample-import.csv](docs/sample-import.csv).
+
+### NLP & Evidence Extraction
+
+The extractor identifies activity, hazard, energy source, barrier/control, location, equipment, failure mode, human behavior, injury outcome and environmental context. Exposure context comes from supported narrative evidence and structured fields, such as pedestrian exposure, shift or weather; it is not a separately measured exposure estimate.
+
+Each supported extraction retains its source, canonical label, confidence and original text span where available. Barrier states distinguish present, failed, absent, mentioned and conflicting controls. Missing evidence is not filled with fabricated text: unsupported fields show **Not stated**, and unresolved gates show **Insufficient information**.
+
+### SIF / PSIF Classification
+
+The prototype implements a Safety Classification and Learning (SCL)-based decision tree:
+
+| Gate | Question | Evidence considered |
+| --- | --- | --- |
+| Q1 | High energy present? | Energy phrases and supported control-to-energy inference |
+| Q2 | High-energy event / energy released? | Release/contact language, prevention language and report type |
+| Q3 | Direct control in place? | Barrier presence, failure, absence or conflict |
+| Q4 | Serious injury? | Injury narrative, structured severity and report type |
+
+Each gate returns **YES / NO / INSUFFICIENT**, with rationale and evidence. Structured fields are labelled separately from narrative spans. Explicit rules also apply: an isolation barrier can imply hazardous energy, and UA/UC report types can support a no-release answer. These are visible rule-based interpretations, not independently verified facts; weak or conflicting evidence may require HSE review.
+
+| SCL class | Implemented decision path |
+| --- | --- |
+| **HSIF** | High energy, an energy event and serious injury/fatality |
+| **PSIF** | High energy, an energy event, no serious injury and absent/failed direct control |
+| **Exposure** | High energy, no energy event and absent/failed direct control |
+| **Capacity** | High energy, an energy event, no serious injury and direct control present |
+| **Success** | High energy, no energy event and direct control present |
+| **LSIF** | Low energy with serious injury |
+| **Low-severity** | Low energy without serious injury |
+
+**Default SIF-potential = PSIF or Exposure.** This grouping is configurable; the underlying SCL class is retained. HSIF is displayed separately as a **SIF Event**. LSIF retains its serious-injury meaning even though it falls outside the default precursor grouping.
+
+Energy and direct-control evidence establish precursor conditions; minor or absent injury is not evidence that those conditions were safe. Injury severity helps distinguish an actual SIF event from a potential precursor and participates in the implemented SCL tree.
+
+When evidence cannot resolve the path, the result is **Undetermined** with candidate classes. If every candidate agrees on SIF-potential, that output can still be resolved while the SCL class remains undetermined. This is the repository's prototype interpretation, requiring HSE calibration rather than an asserted official OIL/IOGP standard. See [SCL engine documentation](docs/scl-engine.md).
+
+## 4. Proposed IOGP Life-Saving Rule Mapping
+
+**PROPOSED SCL → IOGP CROSSWALK**
+
+**SUBJECT TO HSE EXPERT VALIDATION**
+
+Mapping is a separate analytical output and **does not determine SIF classification**. The mapper scores admin-editable keywords, phrases and structural extraction signals, returning a primary category, secondary categories, supporting evidence, confidence and ambiguity information.
+
+Supported categories:
+
+1. Bypassing Safety Controls
+2. Confined Space
+3. Driving
+4. Energy Isolation
+5. Hot Work
+6. Line of Fire
+7. Safe Mechanical Lifting
+8. Work Authorization
+9. Working at Height
+10. Process Safety / No Applicable Rule — the implementation's fallback category, not a tenth IOGP Life-Saving Rule.
+
+The SCL-to-IOGP relationship is the team's proposed crosswalk, requiring independent HSE expert validation. See [IOGP mapping documentation](docs/iogp-mapping.md).
+
+## 5. Explainability & Evidence
+
+### Evidence Confidence
+
+Confidence expresses the engine's certainty about extracted and classified evidence. The composite score combines extraction confidence, SCL gate confidence, evidence completeness and mapping confidence, with penalties for strong model disagreement or control conflicts. It is an explainable heuristic score, not a validated probability of an accident or a safety guarantee.
+
+### Evidence Coverage
+
+Coverage asks whether the report supplies enough evidence to support the assessment. The investigation screen shows answered gates on the decision path, missing evidence and key-field availability. Its completeness component uses gate support, activity/location/equipment fields and description length.
+
+**Confidence and coverage answer different questions.** A matched phrase can have high extraction confidence while the report lacks control evidence needed for classification. Completeness contributes to composite confidence, but coverage remains separately visible.
+
+### Energy + Control Test
+
+The investigation view pairs Q1 high-energy evidence with Q3 direct-control evidence, then exposes the gates used in the SCL path. High energy with absent/failed direct control supports precursor concern; event and injury gates distinguish the resulting class.
+
+### Why Trail
+
+```text
+Priority Factor → Triggered Check → Finding → Supporting Report Text
 ```
-┌────────────── DATA SOURCES ──────────────┐   ┌──────────── INGESTION + NLP ─────────────┐
-│ UA / UC / near miss / incident reports    │   │ validation → normalisation → segmentation│
-│ manual entry · CSV upload · synthetic set │──▶│ → entity extraction → energy + barriers  │
-│ IOGP Life-Saving Rules (taxonomy)         │   │ → SCL gates → SIF → IOGP → pattern check │
-└───────────────────────────────────────────┘   │ → priority → review routing              │
-                                                 └──────────────────┬───────────────────────┘
-┌────────────── PRESENTATION ──────────────┐   ┌──────────── INTELLIGENCE ────────────────┐
-│ Next.js command software (dark, dense)    │◀──│ FastAPI · PostgreSQL + pgvector           │
-│ command center · registry · investigation │   │ pattern mining (HDBSCAN) · EWMA/CUSUM     │
-│ review workspace · patterns · admin       │   │ EB ranking · classifier · audit log       │
-└───────────────────────────────────────────┘   └──────────────────────────────────────────┘
+
+The Why Trail connects each positive priority contribution to its stored gate/entity evidence. Where narrative evidence exists, it displays original report text and links back to the narrative. Structured fields are identified as such. Missing support shows **Not stated in the report** or **Insufficient information**.
+
+Recurrence is supported by other reports and pattern links, not an invented sentence in the current narrative. This source distinction makes the result reviewable.
+
+## 6. Human-in-the-Loop HSE Review
+
+Poorvabhas supports HSE judgment. It is not an autonomous safety decision maker. Reports can enter the review queue because of insufficient information, low confidence, borderline gates, conflicting controls, ambiguous mapping, model/rule disagreement or a manual review request.
+
+Default routing includes confidence below 0.55, a weak gate below 0.65 whose inversion changes the SIF signal, and strong classifier disagreement at 0.70/0.30. Settings can change these thresholds.
+
+| Reviewer action | Behavior |
+| --- | --- |
+| **Confirm** | Accept the current engine result |
+| **Correct** | Change SCL class, SIF-potential or primary rule, with a reason |
+| **Refine** | Mark the assessment insufficient, or add a note; a note-only action keeps review open |
+
+The UI distinguishes **Pending HSE review**, **Expert confirmed** and **Expert corrected**. Reviewer decisions become authoritative report-level results while the original analysis and decision are retained. Decisions record identity, timestamp, reason and note where supplied. Non-note decisions create labelled feedback examples; marking insufficient leaves no definite binary label for classifier training.
+
+```text
+Reviewer Feedback → Stored Decision / Correction
+                  → Controlled Model Retraining / Refinement
 ```
 
-Details: [docs/architecture.md](docs/architecture.md).
+Retraining is an explicit admin action, **not automatically triggered by every decision**. Supported human labels are incorporated during controlled classifier training, with held-out reports excluded from training. Vocabulary, taxonomy and threshold refinement are separate administrative changes.
 
-## System workflow
+## 7. Priority Scoring
 
-`Create report → Analyze → Extract entities → Determine energy → Determine control → SCL classification → SIF potential → IOGP mapping → Priority → Review queue → Reviewer decision → Audit record → Dashboard update`
+**Classification ≠ Priority.** Classification describes the evidence-based SCL/SIF result; priority orders review attention. The default additive model totals up to 100 points:
 
-This exact flow is exercised by the backend test `test_critical_end_to_end_flow` and by the Playwright test `critical flow`.
+| Factor | Default maximum | Basis |
+| --- | --- | --- |
+| Energy exposure | 25 | High-energy gate and extracted energy evidence |
+| Barrier / control failure | 25 | Direct-control status and supporting evidence |
+| Precursor severity (SCL) | 20 | SCL class or unresolved candidate classes |
+| Recurrence | 15 | Earlier SIF-potential/SIF-event reports sharing the primary rule |
+| Exposure / context | 15 | Supported context, such as night work, weather or line of fire |
 
-## SCL classification
+The recurrence window defaults to 90 days relative to the report date. It counts same-rule reports across the dataset; it is broader than an exact hazard/barrier match. Default levels are Critical ≥85, High ≥70, Medium ≥45 and Low below 45. Weights and thresholds are configurable, and partial weights for unresolved evidence do not turn an unknown gate into a known fact.
 
-| Gate | Question | Evidence examples |
-|---|---|---|
-| Q1 | Was high energy present? | "residual pressure", "suspended load", "at 6 m", "415 V MCC panel" |
-| Q2 | Did a high-energy incident (release / contact) occur? | "pressure was released", "load dropped", or "task was stopped" (no) |
-| Q3 | Was a direct control / barrier in place? | "isolation was not verified" (no), "harness tied off" (yes) |
-| Q4 | Was serious injury present? | injury-severity field, "hospitalised with a fracture" |
+Site/activity/location ranking is a separate aggregate view. It uses empirical-Bayes adjustment to moderate small samples, with 90% credible intervals. Sites use precursor density per 100,000 work-hours when exposure data is available; activities and locations use report-volume-adjusted rates. Demo work-hours are synthetic.
 
-Seven classes: **HSIF, PSIF, Exposure, Capacity, Success, LSIF, Low severity** (plus *Undetermined* with the remaining candidates when evidence is missing). SIF-potential = **PSIF + Exposure**; HSIF is shown separately as a *SIF event*. Full decision tree: [docs/scl-engine.md](docs/scl-engine.md).
+The neutral interpretation is **“Highest adjusted SIF-precursor signal in the current dataset.”** Priority and ranking guide attention; they are not outcome predictions. See [ranking documentation](docs/ranking.md).
 
-## IOGP mapping
+## 8. Recurring Pattern Detection
 
-Nine IOGP Life-Saving Rules — Bypassing Safety Controls, Confined Space, Driving, Energy Isolation, Hot Work, Line of Fire, Safe Mechanical Lifting, Work Authorization, Working at Height — plus **Process Safety / No Applicable Rule**. Mapping = admin-editable keywords + phrases × weight + structural signals from extraction (e.g. a failed isolation barrier). Output: primary rule, secondary rules, evidence and confidence.
+Patterns are mined from stored reports and analysis evidence. Eligible rows include SIF-potential/SIF-event reports and unresolved reports with a failed direct control. Features combine activity, failed barrier, energy source and primary rule.
 
-**This is a proposed crosswalk. It is not an official IOGP mapping and requires independent HSE expert validation.** See [docs/iogp-mapping.md](docs/iogp-mapping.md).
+- **Clustering:** scikit-learn HDBSCAN over Jaccard distances between feature sets.
+- **Fallback:** deterministic grouping by activity, barrier and energy when clustering is unavailable or yields no clusters, subject to minimum data requirements.
+- **Exploration:** signatures, sites, locations, activities, barriers, energy sources, associated rules, cohesion and underlying report links.
+- **Trend analysis:** EWMA/CUSUM on report-date bucket counts; at least six periods and ten occurrences are required before a trend is assessed.
 
-## Pattern mining
+Results can be **Stable**, **Increasing**, **Decreasing** or **Insufficient history**. Insufficient history is deliberately shown instead of inventing a trend. Trends describe observed reporting patterns in the available dataset; they do not forecast incidents. See [pattern-mining documentation](docs/pattern-mining.md).
 
-Precursor reports are encoded as sets (activity, failed barriers, energy sources, rule) and clustered with **HDBSCAN over Jaccard distance** (scikit-learn), with deterministic frequency grouping as the fallback. Each pattern records occurrences, sites, locations, activities, barriers, energies, associated rules, cohesion and example reports. Trends are tested on real report dates with **EWMA** and **CUSUM**; with too little data the result is *Insufficient history*. See [docs/pattern-mining.md](docs/pattern-mining.md).
+## 9. Dashboard / Command Center
 
-## Ranking
+The command center brings together reports in the selected period, SIF/PSIF-potential cases, SIF events, cases awaiting HSE review, expert-reviewed cases, recurring precursor patterns and high-priority signals. It includes SIF/SCL distributions, Life-Saving Rule distribution, weekly report counts, site/activity analysis, adjusted ranking and review queue links.
 
-For every site / activity / location: total reports, SIF-potential reports, raw rate, raw precursor count, exposure-normalised density (sites: per 100k work-hours — synthetic exposure) and an **empirical-Bayes adjusted score** with a 90% credible interval (Beta-Binomial for rates, Gamma-Poisson for densities). The top row reads *"Highest adjusted SIF-precursor signal in the current dataset"* — never "most dangerous site". See [docs/ranking.md](docs/ranking.md).
+Period selectors cover 30, 90, 180 and 365 days. Relevant report counts, the priority banner, distributions and ranking use the selected window. Main period-specific KPI/banner links carry matching report-date filters. **Open review items and current mined-pattern totals cover all dates**, as labelled in the UI; some distribution shortcuts also open all-date report lists. The period filter does not re-mine patterns or recompute stored trends.
 
-## Human review
+Counts are queried from the database. The report total counts reports in the period rather than a separate screening-completion counter.
 
-A case enters the queue when:
+## 10. Report Investigation
 
-| Category | Trigger |
-|---|---|
-| Insufficient information | A required SCL gate is unsupported by the report |
-| Rule conflict | Conflicting control statements, or an ambiguous primary rule |
-| Model / rule disagreement | Classifier P(SIF) ≥ 0.70 vs engine "non-SIF" (or ≤ 0.30 vs "SIF") |
-| Borderline | A weak gate (< 0.65) whose inversion **would change the SIF outcome** |
-| Low confidence | Overall confidence < 0.55 |
-| Manual request | An officer sends the report to a reviewer |
+The investigation screen connects the result to its source:
 
-Reviewer actions: **Confirm** (engine result is correct), **Correct** (set the SCL class, SIF-potential or LSR, with a reason) and **Refine** (mark insufficient information, or add a note that keeps the review open). A decision that changes the engine's result is shown as **Expert corrected**; otherwise **Expert confirmed**. The API also accepts `REJECT` (flip SIF-potential). Each decision stores the original prediction, the decision, reviewer identity, timestamp, reason and note, writes an audit record, and becomes a **feedback example**. Retraining is an explicit admin action (Model / Analysis → *Retrain classifier*); models are never retrained automatically after each correction.
+| Area | Information available |
+| --- | --- |
+| Original report | Narrative, metadata and highlighted evidence spans |
+| Extracted evidence | Activity, hazard, energy source, barrier/control, location, equipment and supported exposure/context |
+| Classification | SCL gates, decision path, candidates, SCL class and SIF/PSIF signal |
+| Proposed IOGP mapping | Primary/secondary categories, evidence and confidence |
+| Assessment quality | Evidence confidence, evidence coverage and classifier second opinion |
+| Review priority | Score, factor breakdown and Why Trail |
+| Recurrence | Related patterns and similar-report context |
+| Human decision | Review status, reviewer actions and stored feedback |
+| History | Analysis history and report audit history |
 
-## Technology stack
+Narrative spans, structured fields, rule rationales and cross-report evidence remain distinguishable. The reviewer can trace an assessment back to the report rather than relying on a badge alone.
 
-| Layer | Technology |
-|---|---|
-| Frontend | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4, Radix primitives (shadcn-style components), Lucide icons, Recharts, TanStack Query, Motion |
-| Backend | Python, FastAPI, Pydantic v2, SQLAlchemy 2 |
-| Database | PostgreSQL 16 + pgvector |
-| NLP / ML | spaCy (sentencizer), scikit-learn (TF-IDF, Logistic Regression, TruncatedSVD, HDBSCAN), SciPy, NumPy, pandas; optional HuggingFace Transformers |
-| Auth | bcrypt password hashes, JWT (HS256) in an httpOnly SameSite cookie |
-| Testing | pytest, Vitest + Testing Library, Playwright |
-| Deployment | Vercel (Next.js + FastAPI services) with Neon PostgreSQL + pgvector in production; Docker Compose for local development |
+## 11. Auditability
 
-XGBoost was not needed: the classifier's job is a transparent second opinion and TF-IDF + LogReg exposes term weights directly.
+Audit records retain event type, readable summary, entity, actor (or `system`), timestamp and details where applicable. Recorded operations include:
 
-## Database
+| Readable event | Stored event type |
+| --- | --- |
+| Report created / analyzed | `REPORT_CREATED` / `REPORT_ANALYZED` |
+| SCL classified | `SIF_CLASSIFIED` |
+| LSR mapped | `RULE_MAPPED` |
+| Review requested / decision recorded | `REVIEW_STARTED` / `REVIEW_COMPLETED` |
+| Taxonomy updated | `TAXONOMY_CHANGED` |
+| Model trained/retrained or bulk analysis changed | `MODEL_CHANGED` |
+| Import completed / settings changed | `IMPORT_COMPLETED` / `SETTINGS_CHANGED` |
+| Patterns mined / synthetic dataset seeded | `PATTERNS_MINED` / `DATASET_SEEDED` |
+| Login | `USER_LOGIN` |
 
-The PostgreSQL schema includes reports, analyses, review decisions, model versions and artifacts, pending CSV imports, embeddings (pgvector `vector(64)` when available), audit logs, and settings. Local startup can initialize the schema; Vercel requires the explicit one-time initializer described in [docs/vercel-deployment.md](docs/vercel-deployment.md). See [docs/data-model.md](docs/data-model.md).
+Seeded synthetic reports are analyzed in the recorded seeding workflow. The seeder suppresses individual report-analysis audit entries and records dataset/model/pattern operations; manually created and imported reports use their normal audit workflows. The audit log supports traceability, but the repository does not establish tamper-proof logging or a security certification. See [data model](docs/data-model.md) and [API documentation](docs/api.md).
 
-## API
+## 12. System Architecture
 
-REST under `/api` (OpenAPI UI at `http://localhost:8000/docs`). Main groups: auth, reports, review, dashboard/ranking/patterns, imports, taxonomy, model, settings, audit. See [docs/api.md](docs/api.md).
+```mermaid
+flowchart TB
+    U["HSE Reviewer · HSE Admin<br/>Site Safety Manager · Management"]
+    C["Poorvabhas Console<br/>Next.js · React · TypeScript · Tailwind"]
+    U --> C
+    C -->|"Same-origin /api"| API["FastAPI Backend"]
+    subgraph Services["Backend services"]
+        AUTH["Authentication / permissions"]
+        INGEST["Report ingestion / CSV validation"]
+        NLP["Preprocessing / evidence extraction"]
+        SCL["SCL classification / SIF assessment"]
+        LSR["Proposed IOGP mapping"]
+        PAT["Pattern mining / trend analysis"]
+        PRI["Priority / adjusted ranking"]
+        REV["Review / feedback"]
+        AUDIT["Audit"]
+    end
+    API --> AUTH & INGEST & NLP & SCL & LSR & PAT & PRI & REV & AUDIT
+    NLP --> RULES["Local vocabulary / regex / spaCy"]
+    SCL --> ML["scikit-learn<br/>TF-IDF + Logistic Regression second opinion"]
+    PAT --> CLUSTER["HDBSCAN / deterministic fallback<br/>EWMA / CUSUM"]
+    API --> DB[("PostgreSQL<br/>Reports · analyses · feedback · audit<br/>Model artifacts · pgvector embeddings")]
+    ML --> DB
+    REV --> DB
+    OPT["Optional: local HuggingFace inference<br/>Dependencies + supplied model required"] -.-> SCL
+```
 
-## Installation
+The people above are intended users/personas. Implemented access roles are **HSE Officer** and **HSE Admin**; reviewer, site manager and management are not separate permission roles.
 
-Prerequisites: **Docker Desktop** (simplest) — or Python 3.12+, Node 20+ and PostgreSQL 16 with pgvector for local development.
+Local Docker runs the console, API and PostgreSQL as three services. The repository's Vercel configuration routes the console and API through one project, with Neon providing durable PostgreSQL storage. Model artifacts are database-backed; ephemeral function storage can be a cache. Embeddings use TF-IDF + TruncatedSVD, with 64-dimensional storage and similar-report retrieval; pattern clustering uses discrete feature sets rather than those embeddings.
+
+See [architecture documentation](docs/architecture.md).
+
+## 13. Technology Stack
+
+| Layer | Technology | Purpose |
+| --- | --- | --- |
+| Frontend | Next.js 16, React 19, TypeScript | Console, routing and report/review workflows |
+| UI | Tailwind CSS 4, Radix primitives, Lucide, Motion | Styling, accessible controls, icons and transitions |
+| Charts / data | Recharts, TanStack Query | Dashboard visualization and API state |
+| Backend | Python 3.12 Docker image, FastAPI, Pydantic v2 | API, validation and configuration |
+| Persistence | SQLAlchemy 2, psycopg 3, PostgreSQL 16 | Database access and durable records |
+| NLP | Vocabulary/regex rules, spaCy sentencizer | Normalization, segmentation and evidence extraction |
+| ML | scikit-learn, TF-IDF, Logistic Regression, TruncatedSVD | Classifier second opinion and report embeddings |
+| Analytics | scikit-learn HDBSCAN, NumPy, SciPy, pandas | Patterns, trends and adjusted ranking |
+| Vector storage | pgvector | Vector storage/search; JSON fallback when unavailable |
+| Authentication | bcrypt, PyJWT, httpOnly SameSite cookie | Password hashing, sessions and permissions |
+| Local infrastructure | Docker Compose, Python and Node.js 22 images | Reproducible local services |
+| Deployment configuration | Vercel Services, Neon PostgreSQL | Console/API routing and external database |
+| Testing | pytest, Vitest, Testing Library, Playwright | Backend, component and browser workflow checks |
+| Optional inference | HuggingFace Transformers + PyTorch | Local sequence classifier adapter; excluded from default dependencies |
+
+Transformer inference requires `requirements-transformer.txt`, `USE_TRANSFORMER=true` and a supplied model under `MODEL_PATH/transformer`. It uses local files only. Admin retraining trains TF-IDF + Logistic Regression; it does not implement transformer fine-tuning. Default analysis does not depend on XGBoost or transformer inference.
+
+## 14. Data & Privacy
+
+**DEMO ENVIRONMENT — SYNTHETIC SAFETY DATA**
+
+The generator creates `SEED_REPORTS` randomized synthetic reports **plus five fixed cases**, `SYN-DEMO-001` through `SYN-DEMO-005`. The default `SEED_REPORTS=280` therefore creates 285 reports in a fresh local database. Seven synthetic site profiles use Assam place names; these are not evidence of conditions at real OIL sites. Scenario-designed reference labels, fictional contractors, synthetic exposure hours and a deliberately rising hot-work/gas-testing scenario support demonstration and evaluation.
+
+Manual entry and CSV import can add user-supplied records, so only the seeded dataset is guaranteed synthetic. Keep evaluator inputs synthetic and avoid entering confidential safety narratives into a public demo.
+
+- **No external LLM API dependency:** NLP/classifier processing runs locally in the backend process. On Vercel, that process runs on hosted infrastructure and uses Neon; hosted deployment is not an on-premise data-residency guarantee.
+- **Durable records:** PostgreSQL stores reports, analyses, feedback, audit, CSV sessions and trained classifier/embedder artifacts. Local model files/volumes and serverless caches supplement database persistence.
+- **Human oversight:** reviewer decisions and original engine outputs are retained.
+- **Access controls:** two permission roles, hashed passwords and cookie-based sessions are implemented. Production configuration rejects published default secrets.
+
+Real-data deployment would require an agreed data-sharing, anonymization, access, retention and security process. No production security certification is claimed.
+
+## 15. Local Setup
+
+Run commands from the repository root unless a block changes directory. Use **Docker Desktop with Compose** for the simplest setup. Manual development additionally needs Python 3.12, Node.js 22 and npm; the commands below use the repository's PostgreSQL Docker service.
+
+### Docker setup
+
+Copy [.env.example](.env.example) to `.env`. On PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+Set `SECRET_KEY` in `.env` to the generated value. Retain demo settings for synthetic local use. On macOS/Linux, use `cp .env.example .env` for the copy step. Docker-only users can generate the secret with `docker run --rm python:3.12-slim python -c "import secrets; print(secrets.token_urlsafe(48))"`.
 
 ```bash
-git clone <repo> poorvabhas && cd poorvabhas
-cp .env.example .env          # set SECRET_KEY
-docker compose up --build     # postgres + backend + frontend
+docker compose up --build
 ```
 
-Open **http://localhost:3000**. On first start the backend creates the schema and seeds the synthetic dataset (~30 s).
+| Service | Local address / storage |
+| --- | --- |
+| Console | http://localhost:3000 |
+| FastAPI | http://localhost:8000 |
+| API documentation | http://localhost:8000/docs |
+| Database health | http://localhost:8000/api/health |
+| PostgreSQL | `localhost:5433` by default; `pgdata` volume |
+| Model files | `models` volume; artifacts also stored in PostgreSQL |
 
-## Development
+On a fresh database, the backend initializes tables, seeds and analyzes synthetic reports, trains the classifier/embedder and mines patterns. Wait for startup to complete; timing depends on the machine. Health checks database connectivity, so also verify login and dashboard data.
+
+Compose passes its own backend environment settings; root `.env` is used for Compose interpolation. `SEED_REPORTS` is not forwarded by the current Compose file, so its code default applies in Docker.
+
+### Manual backend and frontend development
+
+First create `.env` and set `SECRET_KEY` as above. Start only the database:
 
 ```bash
-# 1. database only
-docker compose up -d postgres            # exposes localhost:5433
+docker compose up -d postgres
+```
 
-# 2. backend
+In a PowerShell terminal from the repository root:
+
+```powershell
 cd backend
 python -m venv .venv
-.venv/Scripts/activate                   # Windows  (macOS/Linux: source .venv/bin/activate)
-pip install -r requirements-dev.txt
-uvicorn app.main:app --reload --port 8000
-# reseed a LOCAL database from scratch:  python -m app.seed.seed --reset   (never against production)
-
-# 3. frontend
-cd frontend
-npm install
-npm run dev                              # http://localhost:3000, proxies /api → :8000
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
 ```
 
-## Docker
+The backend reads `.env` and `../.env`, including the default local database URL on port 5433. For macOS/Linux, use `.venv/bin/python` instead of `.\.venv\Scripts\python.exe`.
 
-For a single-project Vercel deployment of the existing frontend and FastAPI backend, see [docs/vercel-deployment.md](docs/vercel-deployment.md). The Docker workflow below remains available for local development.
-
-`docker-compose.yml` runs three services:
-
-| Service | Image | Port |
-|---|---|---|
-| `postgres` | `pgvector/pgvector:pg16` | 5433 → 5432 |
-| `backend` | `./backend` (FastAPI, auto-seeds on first start) | 8000 |
-| `frontend` | `./frontend` (Next.js standalone) | 3000 |
-
-Model artefacts live in the `models` volume, database data in `pgdata`. `docker compose down -v` resets everything.
-
-## Demo credentials
-
-| Username | Password | Role | Access |
-|---|---|---|---|
-| `admin` | `Admin@2026` | HSE Admin | Everything, including taxonomy, model, settings, audit |
-| `officer` | `Officer@2026` | HSE Officer | Dashboard, reports, analysis, patterns, review queue, import |
-| `reviewer` | `Reviewer@2026` | HSE Officer | Same as officer (second reviewer identity for demos) |
-
-These are demo-only accounts. Change or remove them before any non-demo use.
-
-## Synthetic dataset
-
-`backend/app/seed/generator.py` generates `SEED_REPORTS` random reports plus 5 fixed demo cases `SYN-DEMO-001…005` (285 with the local default of 280; the production demo uses `SEED_REPORTS=275` for **280 reports**) across seven synthetic site profiles named after Assam locations (Digboi, Duliajan, Naharkatiya, Moran, Bokakhat, Hapjan, Tengakhat), 14 activities and four report types, spread over the last 12 months. The mix includes SIF-potential, non-SIF, borderline and deliberately vague reports, plus phrasings outside the engine's vocabulary.
-
-Each scenario carries a **reference label assigned by scenario design**, not by the engine. The labels drive an honest held-out evaluation (25% hash split). A rising hot-work / gas-testing pattern at Duliajan is planted so the trend detector has a real signal to find. All names, contractors ("Contractor-A (synthetic)") and exposure hours are fictional.
-
-## Testing
+In another terminal from the repository root:
 
 ```bash
-cd backend  && pytest                          # 86 tests: extraction, SCL, mapping, scoring, patterns, ranking, API, E2E flow, deployment
-cd frontend && npm test                        # Vitest: formatting, evidence highlighting, badges, decision form
-cd frontend && npx playwright install chromium && npm run test:e2e   # needs backend + frontend running
+cd frontend
+npm ci
+npm run dev
 ```
 
-Playwright covers: the critical create → analyse → review → decision → audit → dashboard flow, every route rendering, search/filters, role restriction, CSV import, and a responsive check that no route scrolls horizontally at 1440 / 1280 / 1024 / 768 / 390 px. E2E runs add a few records; reset with `docker compose down -v && docker compose up` before a live demo.
+Open http://localhost:3000. Standalone Next.js proxies `/api` to `http://localhost:8000` unless `API_URL` overrides it. Avoid running the full Compose frontend/backend simultaneously with these dev servers on the same ports.
 
-## Limitations
+## 16. Docker and Vercel / Neon Deployment
 
-- **Synthetic evaluation only.** Metrics on the Model page are computed on synthetic data with scenario-designed labels and are optimistic. The deterministic vocabulary was developed alongside those templates, so its agreement is optimistic by construction. Real-world accuracy is unknown until a labelled pilot.
-- **English only.** Assamese/Hindi or code-mixed reports are not handled.
-- **Vocabulary coverage.** Unusual phrasing ("the casing was still full") can leave a gate unanswered. By design this routes the case to review rather than guessing, but it increases reviewer load.
-- **SCL judgement.** Whether a control is "direct" is simplified (e.g. PPE and permits are treated as administrative). Borderline definitions need HSE expert calibration.
-- **Crosswalk.** The SCL-to-IOGP mapping is our proposal and has not been validated by IOGP or OIL experts.
-- **Exposure denominators** for sites are synthetic; activities and locations are ranked by rate only.
-- **CSV import limits.** Validation sessions are stored in PostgreSQL so they survive multiple backend instances. Files are limited to 4 MB to fit Vercel's request limit; large analyses may still need smaller batches or a persistent worker.
+Docker Compose is the local workflow. Root [vercel.json](vercel.json) defines two Vercel services: `frontend/` with Next.js and `backend/` with FastAPI entrypoint `app.main:app`. `/api/*` routes to the backend; other paths route to the frontend. The browser uses same-origin `/api`.
 
-## Future pilot
+For this repository's deployment layout, retain the repository root as the project Root Directory and use the Services configuration described in [docs/vercel-deployment.md](docs/vercel-deployment.md). The deployment documentation records https://poorvabhas.vercel.app as the hosted demo; availability and current database contents are not established by a local test run.
 
-1. Agree a data-sharing and anonymisation protocol with OIL HSE; import 12–24 months of historical UA/UC/near-miss reports.
-2. Have two HSE experts independently label a stratified sample of ~1,000 reports (SCL class + rule); measure inter-rater agreement.
-3. Calibrate vocabulary, direct-control definitions, thresholds and the IOGP crosswalk with those experts.
-4. Fine-tune the transformer classifier on the reviewed labels; evaluate on a held-out, time-split set.
-5. Replace synthetic exposure hours with real man-hours per site.
-6. Run in shadow mode alongside the existing process for one quarter, then evaluate reviewer workload and missed-signal rate.
-7. Add Hindi/Assamese support, SSO (OIL directory) and retention policies.
+| Environment variable | Hosted synthetic demo value / purpose |
+| --- | --- |
+| `DATABASE_URL` | Neon PostgreSQL URL with `sslmode=require`; secret |
+| `SECRET_KEY` | Unique long random secret |
+| `ENVIRONMENT` | `production` |
+| `DEMO_MODE` | `true` |
+| `AUTO_SEED` | `false` |
+| `COOKIE_SECURE` | `true` |
+| `NEXT_PUBLIC_API_URL`, `API_URL` | `/api`; Vercel handles routing |
+| `VECTOR_BACKEND` | `auto`; enable pgvector in the database |
+| `USE_TRANSFORMER` | `false` for the default deployment |
+| `MODEL_PATH` | Optional `/tmp/poorvabhas-models` cache; durable artifacts remain in PostgreSQL |
 
-## Research references
+Vercel startup skips table creation, seeding and model training. **Initialize a new, empty database once from a trusted local CLI**, using the detailed environment setup in the deployment guide and `python -m app.seed.seed` from `backend/`. Use the direct Neon connection for initialization. `SEED_REPORTS=275` produces 280 synthetic reports because the generator adds five fixed cases.
 
-- Edison Electric Institute (EEI). *Safety Classification and Learning (SCL) Model* — the energy-based classification behind the HSIF / PSIF / Exposure / Capacity / Success / LSIF / Low-severity classes.
-- Hallowell, M. R. et al. (2021). *The Statistical Invalidity of TRIR as a Measure of Safety Performance.* Professional Safety — why outcome-rate metrics do not track SIF risk.
-- International Association of Oil & Gas Producers (IOGP). *Report 459 — IOGP Life-Saving Rules* (2018).
-- Campello, R. J. G. B., Moulavi, D., & Sander, J. (2013). *Density-Based Clustering Based on Hierarchical Density Estimates* (HDBSCAN). PAKDD.
-- Roberts, S. W. (1959). *Control Chart Tests Based on Geometric Moving Averages* (EWMA). Technometrics.
-- Page, E. S. (1954). *Continuous Inspection Schemes* (CUSUM). Biometrika.
-- Casella, G. (1985). *An Introduction to Empirical Bayes Data Analysis.* The American Statistician.
+Do not reset an existing hosted database. The seed command's `--reset` option drops tables and is unnecessary for normal setup. Initial seeding, bulk reanalysis, retraining and large imports can exceed a function request's execution window; larger deployments need a persistent job/worker design. Keep CSV batches small enough for current upload and execution constraints.
 
-The team should confirm edition and page details before citing these in the final submission.
+After deployment, verify `/api/health`, login, report detail, review and import workflows. Database health alone does not prove schema initialization, routing, cookie behavior or model availability. This README update does not deploy the application or verify the hosted environment.
 
-## Important disclaimer
+## 17. Demo Accounts
 
-Poorvabhas is a **prototype decision-support tool** built for Smart India Hackathon 2026. It:
+These accounts are created by the seed workflow:
 
-- does **not** predict fatalities, accidents, injuries or individual outcomes;
-- does **not** replace HSE officers, permit-to-work systems or incident investigation;
-- runs on **synthetic demo data** only and contains **no OIL production data**;
-- presents a **proposed** SCL-to-IOGP crosswalk that **requires independent HSE expert validation**;
-- reports model metrics **only** where computed, with their basis stated.
+| Username | Password | Implemented role | Access |
+| --- | --- | --- | --- |
+| `admin` | `Admin@2026` | HSE Admin | Officer workflows plus taxonomy, model, settings and audit administration |
+| `officer` | `Officer@2026` | HSE Officer | Dashboard, reports, analysis, patterns, review and import |
+| `reviewer` | `Reviewer@2026` | HSE Officer | Same permissions as officer; separate reviewer identity |
 
-Every classification is a suggestion with evidence. The HSE reviewer makes the decision.
+Credentials are public and demo-only. Replace/remove demo accounts before handling real safety data.
+
+## 18. Evaluator Demo
+
+Allow about ten minutes after local initialization. Use the synthetic local environment, sign in as `admin`, and keep [sample-import.csv](docs/sample-import.csv) ready.
+
+1. **Command center:** choose a period, inspect SIF-potential cases and high-priority signals, and distinguish period counts from all-date queue/pattern totals.
+2. **Investigate `SYN-DEMO-001`:** search Safety Reports for the fixed pump/isolation case. Inspect residual-pressure evidence, unverified isolation, energy/control gates, Exposure classification and proposed Energy Isolation mapping.
+3. **Follow the Why Trail:** connect priority factors to checks, findings and original text. Compare confidence with coverage; point out missing evidence rather than assuming it.
+4. **Create a vague case:** in New Report select the Vehicle + pedestrian demo case and analyze it. Inspect insufficient-control evidence and review routing.
+5. **Record a human decision:** demonstrate Confirm, Correct or Refine. For a correction, enter a justified change and reason, then inspect review status, preserved original prediction and stored feedback. Retraining remains a separate admin action.
+6. **Inspect patterns and ranking:** open a mined pattern, follow its reports, and examine trend/history. Compare raw counts with adjusted site/activity scores. Show whichever trend the current data supports.
+7. **Import synthetic reports:** validate the sample CSV, preview rows/errors, then import valid rows. Return to the report list and dashboard to see the resulting records.
+8. **Inspect audit history:** show report-analysis/review events and, with admin access, the global audit log. Sign in as officer to demonstrate permission boundaries.
+
+Demo actions create records and decisions. Repeated import of the same IDs may produce duplicate-ID validation errors; use a separate local demo database or new synthetic IDs for repeated runs. The extended [demo script](docs/demo-script.md) provides presentation prompts; actual counts and trends should be checked against the current dataset.
+
+## 19. Testing & Evaluation
+
+The repository contains these automated checks:
+
+| Suite | Scope |
+| --- | --- |
+| Backend pytest | Evidence extraction/spans, SCL paths, missing information, mapping, confidence/priority, review routing, trends, adjusted ranking, auth/permissions, API validation, CSV, feedback, audit and deployment configuration |
+| Frontend Vitest / Testing Library | Formatting/segmentation, evidence highlighting, badges, chart empty states and reviewer decision form behavior |
+| Playwright | Create → analyze → review → decision → audit → dashboard, route rendering, search/filters, officer restrictions, CSV import and horizontal overflow checks at multiple widths |
+
+Run backend tests from the repository root in PowerShell after installing development requirements:
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe -m pytest -q
+```
+
+The backend suite uses an isolated SQLite database with JSON vectors and synthetic fixtures. It does not exercise a real Neon database or PostgreSQL pgvector integration.
+
+Run frontend checks from a separate terminal at the repository root:
+
+```bash
+cd frontend
+npm ci
+npm run lint
+npm test
+npm run build
+```
+
+`npm run lint` runs TypeScript checking (`tsc --noEmit`). For browser tests, first start the backend/frontend against a separate initialized demo database, then:
+
+```bash
+cd frontend
+npx playwright install chromium
+npm run test:e2e
+```
+
+Playwright does not start application servers. Its default target is http://localhost:3000; `E2E_BASE_URL` can select another test environment. Browser tests create reports and submit decisions, so use a test instance rather than the shared hosted demo.
+
+**Verified for this README revision (29 September 2026):** the existing backend pytest suite passed (86 tests), and frontend Vitest passed (10 tests across two files). Playwright, Docker startup, frontend build/type checking and the hosted Vercel/Neon environment were not run as part of this documentation change. Test presence alone is not a passing result.
+
+### Model evaluation basis
+
+The Model page reports computed metrics with their evaluation basis. Classifier evaluation uses a deterministic approximately 25% hash holdout against scenario-designed synthetic reference labels; seed analysis uses out-of-fold predictions where available. The deterministic engine also reports agreement with those synthetic labels.
+
+Those figures do not establish real-world accuracy: the rule vocabulary and generator scenarios were developed together. Human-review evaluation remains pending until at least 20 usable reviewed decisions exist and is selection-biased toward reviewed cases. No coverage percentage, production accuracy or safety outcome metric is asserted here.
+
+## 20. Limitations
+
+- **Synthetic evidence base:** no independently validated OIL production dataset or real-world performance claim.
+- **English vocabulary:** Hindi, Assamese and code-mixed understanding are not implemented; unusual wording can leave evidence unresolved.
+- **Simplified rules:** direct versus administrative controls, control-implied energy and report-type assumptions require HSE calibration. Extraction confidence is heuristic.
+- **Proposed mapping:** the SCL/IOGP crosswalk needs independent expert validation.
+- **Ranking denominators:** site exposure hours are synthetic; activity/location rates use report volume rather than actual worker exposure. Reporting behavior can affect every signal.
+- **Recurrence breadth:** the priority count uses a shared primary rule; stored pattern matches provide more specific context. Trend labels describe report counts and need sufficient history.
+- **Operational scale:** synchronous analysis/import/admin jobs and serverless limits constrain large datasets. Optional transformer inference requires a supplied model; transformer training is not implemented.
+- **Validation boundaries:** unit/API checks do not establish production security, database resilience, pgvector integration or effectiveness of an HSE intervention.
+
+The prototype identifies evidence-supported precursors and prioritizes human review. It does not predict accidents or fatalities, replace HSE officers, or guarantee safety.
+
+## 21. Future Scope
+
+The following are proposals, not current integrations or validated capabilities:
+
+1. Agree an OIL HSE data-sharing and anonymization protocol and run an independently labelled pilot.
+2. Use multiple HSE experts to validate SCL/control definitions and the proposed IOGP crosswalk, including inter-reviewer agreement.
+3. Evaluate on held-out historical/time-separated reports and measure missed precursors, false positives and reviewer workload.
+4. Replace synthetic exposure denominators with verified operational exposure data.
+5. Add controlled offline transformer training and Hindi/Assamese/code-mixed support when appropriate labelled data exists.
+6. Add persistent workers, organizational SSO, retention controls and deployment security validation.
+7. Run in shadow mode alongside the established HSE process before considering operational adoption.
+
+Poorvabhas's submission objective is a traceable, human-reviewed demonstration of **detecting fatal potential before the outcome**.
